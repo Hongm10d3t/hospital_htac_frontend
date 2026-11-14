@@ -14,6 +14,7 @@ import { SpecialtiesRoomsPage } from '../pages/admin/SpecialtiesRoomsPage';
 import { StaffAccountsPage } from '../pages/admin/StaffAccountsPage';
 import { DoctorProfilesPage } from '../pages/admin/DoctorProfilesPage';
 import { ClinicSlotsPage } from '../pages/admin/ClinicSlotsPage';
+import { PurchaseRequestsPage } from '../pages/admin/PurchaseRequestsPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 export const AppRoutes: React.FC = () => {
@@ -46,7 +47,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="staff-accounts" element={<StaffAccountsPage />} />
         <Route path="doctor-profiles" element={<DoctorProfilesPage />} />
         <Route path="clinic-slots" element={<ClinicSlotsPage />} />
-        <Route path="purchase-requests" element={<AdminDashboardPage />} />
+        <Route path="purchase-requests" element={<PurchaseRequestsPage />} />
       </Route>
 
       {/* 4. PHÂN HỆ TIẾP ĐÓN (RECEPTIONIST PORTAL) */}

@@ -139,7 +139,13 @@ class ApiService {
       credentials: 'same-origin', // Luôn gửi kèm cookie JSESSIONID
     };
 
-    const response = await fetch(endpoint, config);
+    // Tự động chuẩn hóa tiền tố /api/v1 nếu endpoint gọi trực tiếp mô-đun
+    let normalizedEndpoint = endpoint;
+    if (normalizedEndpoint.startsWith('/') && !normalizedEndpoint.startsWith('/api/')) {
+      normalizedEndpoint = `/api/v1${normalizedEndpoint}`;
+    }
+
+    const response = await fetch(normalizedEndpoint, config);
 
     // Xử lý status 204 No Content
     if (response.status === 204) {
@@ -164,6 +170,13 @@ class ApiService {
 
     if (isJson) {
       return (await response.json()) as T;
+    }
+
+    if (contentType.includes('text/html')) {
+      throw new ApiError(502, {
+        code: 'INVALID_API_RESPONSE',
+        message: `Endpoint ${normalizedEndpoint} trả về HTML thay vì dữ liệu JSON hợp lệ.`,
+      });
     }
 
     return (await response.text()) as T;

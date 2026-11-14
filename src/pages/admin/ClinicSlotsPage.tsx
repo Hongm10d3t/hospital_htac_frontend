@@ -176,7 +176,8 @@ export const ClinicSlotsPage: React.FC = () => {
     setIsLoadingSlots(true);
     try {
       // Backend: from gồm đầu (Thứ Hai 00:00:00+07:00), to loại cuối (Thứ Hai tuần kế tiếp 00:00:00+07:00)
-      const fromStr = toStartOfDayIso(weekDates[0]);
+      const weekDays = getWeekDates(currentMonday);
+      const fromStr = toStartOfDayIso(weekDays[0]);
       const nextMonday = new Date(currentMonday);
       nextMonday.setDate(nextMonday.getDate() + 7);
       const toStr = toStartOfDayIso(nextMonday);
@@ -201,23 +202,7 @@ export const ClinicSlotsPage: React.FC = () => {
       }
 
       const res = await clinicSlotService.listSlots(params);
-      let list = res.items || [];
-
-      // Lọc thêm theo chuyên khoa (nếu chọn)
-      if (filterSpecialtyId !== 'ALL') {
-        const specId = Number(filterSpecialtyId);
-        list = list.filter((slot: ClinicSlotResponse) => {
-          const room = roomsMap.get(slot.roomId);
-          return room && room.specialtyId === specId;
-        });
-      }
-
-      // Lọc theo trạng thái OPEN / CLOSED
-      if (filterStatus !== 'ALL') {
-        list = list.filter((slot: ClinicSlotResponse) => slot.status === filterStatus);
-      }
-
-      setSlots(list);
+      setSlots(res.items || []);
     } catch {
       toast({
         type: 'error',
@@ -227,11 +212,27 @@ export const ClinicSlotsPage: React.FC = () => {
     } finally {
       setIsLoadingSlots(false);
     }
-  }, [weekDates, currentMonday, filterRoomId, filterDoctorId, filterSpecialtyId, filterStatus, roomsMap, toast]);
+  }, [currentMonday, filterRoomId, filterDoctorId, toast]);
 
   useEffect(() => {
     loadSlots();
   }, [loadSlots]);
+
+  // Lọc client-side theo Chuyên khoa và Trạng thái nhận hẹn
+  const displaySlots = useMemo(() => {
+    let list = slots;
+    if (filterSpecialtyId !== 'ALL') {
+      const specId = Number(filterSpecialtyId);
+      list = list.filter((slot) => {
+        const room = roomsMap.get(slot.roomId);
+        return room && room.specialtyId === specId;
+      });
+    }
+    if (filterStatus !== 'ALL') {
+      list = list.filter((slot) => slot.status === filterStatus);
+    }
+    return list;
+  }, [slots, filterSpecialtyId, filterStatus, roomsMap]);
 
   // === 6. ĐIỀU HƯỚNG TUẦN ===
   const handlePrevWeek = () => {
@@ -264,7 +265,7 @@ export const ClinicSlotsPage: React.FC = () => {
       map.set(formatDateIso(d), []);
     });
 
-    slots.forEach((slot) => {
+    displaySlots.forEach((slot) => {
       // startAt là ISO instant (UTC), cần chuyển về ngày theo giờ local Việt Nam
       const slotDate = new Date(slot.startAt);
       const dateKey = formatDateIso(slotDate);
@@ -279,16 +280,16 @@ export const ClinicSlotsPage: React.FC = () => {
     });
 
     return map;
-  }, [weekDates, slots]);
+  }, [weekDates, displaySlots]);
 
   // Thống kê nhanh
   const stats = useMemo(() => {
-    const total = slots.length;
-    const openCount = slots.filter((s) => s.status === 'OPEN').length;
-    const closedCount = slots.filter((s) => s.status === 'CLOSED').length;
-    const uniqueDoctors = new Set(slots.map((s) => s.doctorId)).size;
+    const total = displaySlots.length;
+    const openCount = displaySlots.filter((s) => s.status === 'OPEN').length;
+    const closedCount = displaySlots.filter((s) => s.status === 'CLOSED').length;
+    const uniqueDoctors = new Set(displaySlots.map((s) => s.doctorId)).size;
     return { total, openCount, closedCount, uniqueDoctors };
-  }, [slots]);
+  }, [displaySlots]);
 
   // Danh sách bác sĩ được gợi ý theo chuyên khoa của phòng (khi tạo batch/single)
   const getDoctorsForRoom = (roomIdStr: string) => {
@@ -997,14 +998,14 @@ export const ClinicSlotsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {slots.length === 0 ? (
+                {displaySlots.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-12 text-center text-slate-400">
                       Không tìm thấy ca khám nào thỏa mãn điều kiện lọc.
                     </td>
                   </tr>
                 ) : (
-                  slots.map((slot) => {
+                  displaySlots.map((slot) => {
                     const room = roomsMap.get(slot.roomId);
                     const doctor = doctorsMap.get(slot.doctorId);
                     const specialty = room ? specialtiesMap.get(room.specialtyId) : null;

@@ -12,6 +12,7 @@ export type MedicalStatusType =
   | 'ACTIVE'
   | 'OPEN'
   | 'CLOSED'
+  | 'APPROVED'
   | 'NOT_COMPLETED'
   | 'BLOCKED'
   | 'REJECTED'
@@ -41,6 +42,7 @@ export const STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Đang hoạt động',
   OPEN: 'Đang mở (Nhận hẹn)',
   CLOSED: 'Đã đóng',
+  APPROVED: 'Đã phê duyệt',
   NOT_COMPLETED: 'Không đến khám',
   BLOCKED: 'Đã khóa',
   REJECTED: 'Từ chối',
@@ -95,6 +97,7 @@ export const Badge: React.FC<BadgeProps> = ({
     case 'AVAILABLE':
     case 'ACTIVE':
     case 'OPEN':
+    case 'APPROVED':
       // Xanh lá dược học / an toàn
       colorStyles =
         variant === 'solid'

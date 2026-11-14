@@ -71,7 +71,7 @@ export const clinicSlotService = {
     if (params?.sort) query.set('sort', params.sort);
 
     const queryString = query.toString();
-    const url = `/admin/clinic-slots${queryString ? `?${queryString}` : ''}`;
+    const url = `/api/v1/admin/clinic-slots${queryString ? `?${queryString}` : ''}`;
     return api.get<PageResponse<ClinicSlotResponse>>(url);
   },
 
@@ -79,34 +79,34 @@ export const clinicSlotService = {
    * Xem chi tiết 1 khung giờ khám theo ID
    */
   async getSlot(id: number): Promise<ClinicSlotResponse> {
-    return api.get<ClinicSlotResponse>(`/admin/clinic-slots/${id}`);
+    return api.get<ClinicSlotResponse>(`/api/v1/admin/clinic-slots/${id}`);
   },
 
   /**
    * Tạo 1 khung giờ khám đơn lẻ
    */
   async createSlot(data: CreateClinicSlotRequest): Promise<ClinicSlotResponse> {
-    return api.post<ClinicSlotResponse>('/admin/clinic-slots', data);
+    return api.post<ClinicSlotResponse>('/api/v1/admin/clinic-slots', data);
   },
 
   /**
    * Tạo nhiều khung giờ khám hàng loạt theo tuần (Batch Session)
    */
   async createSession(data: CreateClinicSessionRequest): Promise<ClinicSlotResponse[]> {
-    return api.post<ClinicSlotResponse[]>('/admin/clinic-slots/sessions', data);
+    return api.post<ClinicSlotResponse[]>('/api/v1/admin/clinic-slots/sessions', data);
   },
 
   /**
    * Cập nhật thời gian hoặc sức chứa khung giờ khám
    */
   async updateSlot(id: number, data: UpdateClinicSlotRequest): Promise<ClinicSlotResponse> {
-    return api.put<ClinicSlotResponse>(`/admin/clinic-slots/${id}`, data);
+    return api.put<ClinicSlotResponse>(`/api/v1/admin/clinic-slots/${id}`, data);
   },
 
   /**
    * Đóng nhận đăng ký cho khung giờ khám (trạng thái chuyển sang CLOSED)
    */
   async closeSlot(id: number): Promise<void> {
-    return api.post<void>(`/admin/clinic-slots/${id}/close`);
+    return api.post<void>(`/api/v1/admin/clinic-slots/${id}/close`);
   },
 };
