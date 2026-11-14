@@ -19,6 +19,12 @@ import { DoctorProfilesPage } from '../pages/admin/DoctorProfilesPage';
 import { ClinicSlotsPage } from '../pages/admin/ClinicSlotsPage';
 import { PurchaseRequestsPage } from '../pages/admin/PurchaseRequestsPage';
 import { ReceptionAppointmentsPage } from '../pages/reception/ReceptionAppointmentsPage';
+import { ReceptionPatientsPage } from '../pages/reception/ReceptionPatientsPage';
+import { ReceptionCheckinPage } from '../pages/reception/ReceptionCheckinPage';
+import { ReceptionQueuePage } from '../pages/reception/ReceptionQueuePage';
+import { DoctorWorklistPage } from '../pages/doctor/DoctorWorklistPage';
+import { DoctorRecordsPage } from '../pages/doctor/DoctorRecordsPage';
+import { DoctorMedicinesPage } from '../pages/doctor/DoctorMedicinesPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 export const AppRoutes: React.FC = () => {
@@ -90,8 +96,11 @@ export const AppRoutes: React.FC = () => {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/reception/appointments" replace />} />
+        <Route index element={<Navigate to="/reception/checkin" replace />} />
+        <Route path="checkin" element={<ReceptionCheckinPage />} />
         <Route path="appointments" element={<ReceptionAppointmentsPage />} />
+        <Route path="patients" element={<ReceptionPatientsPage />} />
+        <Route path="queue" element={<ReceptionQueuePage />} />
         <Route
           path="*"
           element={
@@ -110,6 +119,9 @@ export const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<Navigate to="/doctor/worklist" replace />} />
+        <Route path="worklist" element={<DoctorWorklistPage />} />
+        <Route path="records" element={<DoctorRecordsPage />} />
+        <Route path="medicines" element={<DoctorMedicinesPage />} />
         <Route
           path="*"
           element={

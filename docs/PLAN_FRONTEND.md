@@ -125,38 +125,38 @@ Mục tiêu: Xây dựng cổng dịch vụ công khai và cá nhân cho bệnh 
 
 ---
 
-### GIAI ĐOẠN 3: PHÂN HỆ TIẾP ĐÓN BỆNH NHÂN (RECEPTIONIST PORTAL) (F03)
+### GIAI ĐOẠN 3: PHÂN HỆ TIẾP ĐÓN BỆNH NHÂN (RECEPTIONIST PORTAL) (F03) - [HOÀN THÀNH 100%]
 
 Mục tiêu: Tối ưu hóa tốc độ tiếp nhận bệnh nhân tại quầy tiếp đón, kiểm soát số thứ tự không trùng lặp và xác nhận lịch hẹn.
 
-* **F03.01 — Quản lý & Xác nhận Lịch hẹn Online (Appointment Confirmation)**
+* **F03.01 — Quản lý & Xác nhận Lịch hẹn Online (Appointment Confirmation)** - [ĐÃ HOÀN THÀNH]
   * Kết nối API: `GET /api/v1/reception/appointments`, `PATCH /{id}/confirm`, `PATCH /{id}/close`.
   * Nhiệm vụ: Danh sách lịch hẹn trực tuyến trong ngày/tuần; hiển thị SĐT tài khoản bệnh nhân; nhân viên bấm gọi xác nhận ➔ chuyển `CONFIRMED`; đóng lịch hẹn vắng mặt (`NOT_COMPLETED` kèm lý do).
-* **F03.02 — Tra cứu & Tiếp nhận Hồ sơ Bệnh nhân (Patient Directory)**
+* **F03.02 — Tra cứu & Tiếp nhận Hồ sơ Bệnh nhân (Patient Directory)** - [ĐÃ HOÀN THÀNH]
   * Kết nối API: `GET /api/v1/reception/patients`, `POST`, `PUT /{id}`.
   * Nhiệm vụ: Ô tìm kiếm nhanh bệnh nhân (theo CCCD, SĐT hoặc Mã bệnh nhân); nếu bệnh nhân vãng lai chưa có hồ sơ thì mở form tạo nhanh mã bệnh nhân mới; cập nhật thông tin hành chính.
-* **F03.03 — Tiếp đón Khám bệnh & Cấp Số Thứ Tự (Check-in & Queuing)**
+* **F03.03 — Tiếp đón Khám bệnh & Cấp Số Thứ Tự (Check-in & Queuing)** - [ĐÃ HOÀN THÀNH & TỐI ƯU UI/UX]
   * Kết nối API: `POST /api/v1/reception/visits`, `GET /api/v1/reception/visits`.
   * Nhiệm vụ: Tiếp nhận bệnh nhân có hẹn trước hoặc bệnh nhân vãng lai; chọn phòng khám và bác sĩ đang trực; hệ thống tự động cấp số thứ tự (`queue_number`) duy nhất theo phòng/ngày; đẩy bệnh nhân vào trạng thái `WAITING` trên màn hình của Bác sĩ.
-* **F03.04 — Bảng điều khiển Giám sát Hàng đợi Phòng khám**
-  * Kết nối API: `GET /api/v1/reception/visits`, `PATCH /{id}/cancel`, `PATCH /{id}/void`.
-  * Nhiệm vụ: Màn hình theo dõi tổng thể số lượng bệnh nhân đang chờ tại từng phòng khám; hỗ trợ hủy hoặc vô hiệu hóa (`VOIDED`) lượt tiếp nhận nhập nhầm.
+* **F03.04 — Bảng điều khiển Giám sát Hàng đợi Phòng khám (Reception Queue Dashboard)** - [ĐÃ HOÀN THÀNH]
+  * Kết nối API: `GET /api/v1/reception/visits/waiting`, `POST /{id}/not-complete`, `POST /{id}/void`, `GET /api/v1/reports/visits`.
+  * Nhiệm vụ: Màn hình theo dõi tổng thể số lượng bệnh nhân đang chờ tại từng phòng khám; thẻ trạng thái từng phòng khám; tự động làm mới theo chu kỳ; hỗ trợ báo vắng (`NOT_COMPLETED`) hoặc vô hiệu hóa (`VOIDED`) lượt tiếp nhận nhập nhầm.
 
 ---
 
-### GIAI ĐOẠN 4: PHÂN HỆ BÁC SĨ KHÁM BỆNH & KÊ ĐƠN (DOCTOR PORTAL) (F04)
+### GIAI ĐOẠN 4: PHÂN HỆ BÁC SĨ KHÁM BỆNH & KÊ ĐƠN (DOCTOR PORTAL) (F04) - [HOÀN THÀNH 100%]
 
 Mục tiêu: Xây dựng bàn làm việc chuyên môn cho Bác sĩ, tập trung ghi chép bệnh án và kê đơn thuốc an toàn, nhanh chóng.
 
-* **F04.01 — Bàn làm việc & Danh sách Chờ khám (Doctor Worklist)**
-  * Kết nối API: `GET /api/v1/doctor/visits`, `GET /api/v1/doctor/visits/{id}`.
-  * Nhiệm vụ: Danh sách bệnh nhân đang đợi khám (`WAITING`) sắp xếp theo số thứ tự; xem nhanh lý do khám và lịch sử các lần khám trước của bệnh nhân; nút "Bắt đầu khám" chuyển trạng thái sang `IN_PROGRESS`.
-* **F04.02 — Ghi nhận Bệnh án & Chẩn đoán Y khoa (Clinical Records)**
-  * Kết nối API: `PUT /api/v1/doctor/visits/{id}/record`, `POST /api/v1/doctor/visits/{id}/complete`, `POST /{id}/abandon`.
-  * Nhiệm vụ: Nhập triệu chứng, tiền sử bệnh, tiền sử dị ứng, chỉ số sinh tồn (mạch, huyết áp, nhiệt độ); chẩn đoán bệnh (mã ICD và kết luận chi tiết); phác đồ xử trí và lời dặn; chọn ngày khuyến nghị tái khám; hoàn tất ca khám (`COMPLETED`).
-* **F04.03 — Kê đơn Thuốc Điện tử (E-Prescription)**
-  * Kết nối API: `GET /api/v1/doctor/medicines`, `POST /api/v1/doctor/visits/{id}/prescriptions`, `PUT /api/v1/doctor/prescriptions/{id}/items`, `POST /{id}/issue`, `POST /{id}/cancel`.
-  * Nhiệm vụ: Tìm kiếm thuốc theo tên hoạt chất/tên thương mại; nhập số lượng theo đơn vị cơ sở; nhập hướng dẫn sử dụng (số lần/ngày, liều lượng, uống trước/sau ăn); phát hành đơn thuốc (`ISSUED`) để chuyển sang Quầy Dược.
+* **F04.01 — Bàn làm việc & Danh sách Chờ khám (Doctor Worklist)** - [ĐÃ HOÀN THÀNH]
+  * Kết nối API: `GET /api/v1/doctor/slots`, `GET /api/v1/doctor/slots/{slotId}/waiting`, `POST /api/v1/doctor/visits/{id}/start`, `GET /api/v1/doctor/visits/{id}/history`.
+  * Nhiệm vụ: Thanh chọn ca khám được phân công trong ngày; danh sách bệnh nhân đang đợi khám (`WAITING`) sắp xếp theo số thứ tự tăng dần; tra cứu nhanh lịch sử khám và đơn thuốc cũ trong 5 giây; nút "Gọi vào khám" chuyển trạng thái sang `IN_PROGRESS` và dẫn tới phòng bệnh án.
+* **F04.02 — Ghi nhận Bệnh án & Chẩn đoán Y khoa (Clinical Records)** - [ĐÃ HOÀN THÀNH]
+  * Kết nối API: `PUT /api/v1/doctor/visits/{id}/clinical`, `POST /api/v1/doctor/visits/{id}/complete`, `POST /{id}/not-complete`, `GET /api/v1/doctor/visits/{id}/prescriptions`.
+  * Nhiệm vụ: Bàn ghi bệnh án chuẩn OPERATE; nhập sinh hiệu nhanh (HA, mạch, nhiệt độ, SpO2); chọn nhanh mã ICD-10 phổ biến; chẩn đoán bắt buộc; phác đồ điều trị và hẹn tái khám (+3, +7, +14, +30 ngày); xem đơn thuốc đã kê; hoàn tất ca khám (`COMPLETED`) hoặc báo vắng (`NOT_COMPLETED`).
+* **F04.03 — Kê đơn Thuốc Điện tử (E-Prescription)** - [ĐÃ HOÀN THÀNH]
+  * Kết nối API: `GET /api/v1/doctor/medicines`, `POST /api/v1/doctor/visits/{id}/prescriptions`, `PUT /api/v1/doctor/prescriptions/{id}`, `POST /api/v1/doctor/prescriptions/{id}/issue`, `POST /api/v1/doctor/prescriptions/{id}/cancel`.
+  * Nhiệm vụ: Tìm kiếm thuốc theo tên hoạt chất/biệt dược/hàm lượng; soạn đơn thuốc điện tử với gợi ý liều dùng phổ biến; lưu nháp (`DRAFT`); phát hành đơn (`ISSUED`) chuyển thẳng sang Quầy Dược; xem và in toa thuốc khổ chuẩn; hủy đơn thuốc kèm lý do.
 
 ---
 
