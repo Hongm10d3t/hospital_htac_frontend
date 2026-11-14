@@ -8,6 +8,7 @@ import { DoctorsPage } from '../pages/public/DoctorsPage';
 import { BookingPage } from '../pages/public/BookingPage';
 import { LoginPage } from '../pages/auth/LoginPage';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
+import { ProfilePage } from '../pages/admin/ProfilePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 export const AppRoutes: React.FC = () => {
@@ -34,6 +35,7 @@ export const AppRoutes: React.FC = () => {
       >
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="dashboard" element={<AdminDashboardPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         {/* Các module F01 sẽ được triển khai chi tiết ở Giai đoạn 1 */}
         <Route path="hospital-config" element={<AdminDashboardPage />} />
         <Route path="specialties-rooms" element={<AdminDashboardPage />} />

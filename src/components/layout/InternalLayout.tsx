@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Badge } from '../ui/Badge';
 import { Modal } from '../ui/Modal';
@@ -21,6 +21,7 @@ import {
   Settings,
   ShieldCheck,
   Stethoscope,
+  User,
   UserCheck,
   Users,
   X,
@@ -172,16 +173,28 @@ export const InternalLayout: React.FC = () => {
 
         {/* Thông tin người dùng & Hành động nhanh */}
         <div className="flex items-center gap-3 sm:gap-4">
-          <div className="text-right hidden sm:block">
+          <Link
+            to="/admin/profile"
+            className="text-right hidden sm:block hover:opacity-80 transition-opacity"
+            title="Xem hồ sơ cá nhân"
+          >
             <div className="text-xs font-semibold text-slate-900">{user?.fullName || user?.username}</div>
             <div className="text-[11px] text-slate-500">{user?.phone}</div>
-          </div>
+          </Link>
 
           <Badge status={role === 'ADMIN' ? 'PRIMARY' : 'ACTIVE'} variant="subtle" withDot={false}>
             {role || 'STAFF'}
           </Badge>
 
           <div className="h-6 w-px bg-slate-200 mx-1" />
+
+          <Link
+            to="/admin/profile"
+            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            title="Hồ sơ cá nhân & Bảo mật"
+          >
+            <User className="w-4 h-4" />
+          </Link>
 
           <button
             type="button"
@@ -193,7 +206,7 @@ export const InternalLayout: React.FC = () => {
               setIsPasswordModalOpen(true);
             }}
             className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-            title="Đổi mật khẩu"
+            title="Đổi mật khẩu nhanh"
           >
             <KeyRound className="w-4 h-4" />
           </button>
