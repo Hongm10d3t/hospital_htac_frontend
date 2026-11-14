@@ -25,11 +25,23 @@ export interface AuthContextType {
   hasRole: (roles: UserRole | UserRole[]) => boolean;
 }
 
+export const DEFAULT_HOSPITAL_CONFIG: HospitalConfig = {
+  id: 1,
+  name: 'Bệnh viện Đa khoa Quốc tế HTAC',
+  address: 'Số 123 Đường Giải Phóng, Quận Đống Đa, Hà Nội',
+  phone: '1900 6868',
+  email: 'contact@htachospital.vn',
+  logoUrl: '/logo.png',
+  description:
+    'Bệnh viện Đa khoa Quốc tế HTAC - Đơn vị y tế kỹ thuật cao cung cấp dịch vụ khám chữa bệnh chất lượng, an toàn và chuyên nghiệp hàng đầu.',
+  advanceBookingDays: 30,
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AccountResponse | null>(null);
-  const [hospitalConfig, setHospitalConfig] = useState<HospitalConfig | null>(null);
+  const [hospitalConfig, setHospitalConfig] = useState<HospitalConfig | null>(DEFAULT_HOSPITAL_CONFIG);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,26 +51,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshHospitalConfig = useCallback(async (): Promise<HospitalConfig | null> => {
     try {
       const config = await authService.getHospitalConfig();
-      setHospitalConfig(config);
+      const mergedConfig: HospitalConfig = {
+        ...DEFAULT_HOSPITAL_CONFIG,
+        ...config,
+        logoUrl: config.logoUrl || '/logo.png',
+        name: config.name || DEFAULT_HOSPITAL_CONFIG.name,
+      };
+      setHospitalConfig(mergedConfig);
 
       // Cập nhật tiêu đề trang
-      if (config.name) {
-        document.title = `${config.name} - Hệ thống Quản lý Bệnh viện Đa khoa`;
+      if (mergedConfig.name) {
+        document.title = `${mergedConfig.name} - Hệ thống Quản lý Bệnh viện Đa khoa`;
       }
 
-      // Cập nhật Favicon nếu có logo viện
-      if (config.logoUrl) {
-        const link = (document.querySelector("link[rel*='icon']") as HTMLLinkElement) || document.createElement('link');
-        link.type = 'image/x-icon';
-        link.rel = 'shortcut icon';
-        link.href = config.logoUrl;
-        document.getElementsByTagName('head')[0].appendChild(link);
-      }
+      // Cập nhật Favicon
+      const link = (document.querySelector("link[rel*='icon']") as HTMLLinkElement) || document.createElement('link');
+      link.type = 'image/png';
+      link.rel = 'shortcut icon';
+      link.href = mergedConfig.logoUrl || '/logo.png';
+      document.getElementsByTagName('head')[0].appendChild(link);
 
-      return config;
+      return mergedConfig;
     } catch (err) {
-      console.warn('[AuthContext] Không thể tải cấu hình bệnh viện:', err);
-      return null;
+      console.warn('[AuthContext] Không thể tải cấu hình bệnh viện từ backend, sử dụng cấu hình mặc định:', err);
+      return DEFAULT_HOSPITAL_CONFIG;
     }
   }, []);
 

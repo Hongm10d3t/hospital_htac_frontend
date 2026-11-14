@@ -129,24 +129,22 @@ export const HomePage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             {/* Cột trái: Logo, Thông điệp & Nút CTA */}
             <div className="lg:col-span-7 space-y-6">
-              {/* Logo Bệnh viện thật (nếu có từ cấu hình bệnh viện) */}
-              {config?.logoUrl && (
-                <div className="inline-flex items-center gap-3 p-2 pr-4 bg-white/90 backdrop-blur-xs rounded-2xl border border-slate-200/90 shadow-xs">
-                  <img
-                    src={config.logoUrl}
-                    alt={config.name || 'Logo Bệnh viện'}
-                    className="h-12 w-auto max-w-[140px] object-contain rounded-xl"
-                  />
-                  <div className="border-l border-slate-200 pl-3">
-                    <div className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      {config.name || 'Bệnh viện Đa khoa HTAC'}
-                    </div>
-                    <div className="text-[10px] text-slate-500 font-medium">
-                      Hệ thống Quản lý Y tế Kỹ thuật cao
-                    </div>
+              {/* Logo Bệnh viện thật */}
+              <div className="inline-flex items-center gap-3 p-2 pr-4 bg-white/90 backdrop-blur-xs rounded-2xl border border-slate-200/90 shadow-xs">
+                <img
+                  src={config?.logoUrl || '/logo.png'}
+                  alt={config?.name || 'Logo Bệnh viện'}
+                  className="h-12 w-auto max-w-[140px] object-contain rounded-xl"
+                />
+                <div className="border-l border-slate-200 pl-3">
+                  <div className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    {config?.name || 'Bệnh viện Đa khoa Quốc tế HTAC'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-medium">
+                    Hệ thống Quản lý Y tế Kỹ thuật cao
                   </div>
                 </div>
-              )}
+              </div>
 
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-100/80 text-blue-800 text-xs font-bold border border-blue-200/80 shadow-2xs">
                 <Sparkles className="w-4 h-4 text-blue-600" />
@@ -203,22 +201,16 @@ export const HomePage: React.FC = () => {
             {/* Cột phải: Thẻ tóm tắt thông số & Hình ảnh thật của đội ngũ y khoa */}
             <div className="lg:col-span-5 relative">
               <div className="relative mx-auto max-w-md bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xl space-y-6">
-                {/* Header thẻ: Logo viện thật hoặc icon */}
+                {/* Header thẻ: Logo viện thật */}
                 <div className="flex items-center gap-3.5 pb-4 border-b border-slate-100">
-                  {config?.logoUrl ? (
-                    <img
-                      src={config.logoUrl}
-                      alt={config.name || 'Logo Bệnh viện'}
-                      className="w-14 h-14 object-contain rounded-2xl bg-white p-1 border border-slate-200 shadow-xs shrink-0"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-sky-600 text-white flex items-center justify-center font-bold text-2xl shadow-md shrink-0">
-                      +
-                    </div>
-                  )}
+                  <img
+                    src={config?.logoUrl || '/logo.png'}
+                    alt={config?.name || 'Logo Bệnh viện'}
+                    className="w-14 h-14 object-contain rounded-2xl bg-white p-1 border border-slate-200 shadow-xs shrink-0"
+                  />
                   <div>
                     <h3 className="font-extrabold text-slate-900 text-lg leading-tight">
-                      {config?.name || 'Bệnh viện Đa khoa HTAC'}
+                      {config?.name || 'Bệnh viện Đa khoa Quốc tế HTAC'}
                     </h3>
                     <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold mt-1">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />

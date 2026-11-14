@@ -155,17 +155,11 @@ export const InternalLayout: React.FC = () => {
           </button>
 
           <div className="flex items-center gap-2.5">
-            {hospitalConfig?.logoUrl ? (
-              <img
-                src={hospitalConfig.logoUrl}
-                alt={hospitalConfig.name || 'Logo Bệnh viện'}
-                className="h-9 w-auto max-w-[120px] object-contain rounded-lg bg-white p-0.5 border border-slate-200/90 shadow-xs"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center font-bold tracking-tight shadow-xs">
-                H
-              </div>
-            )}
+            <img
+              src={hospitalConfig?.logoUrl || '/logo.png'}
+              alt={hospitalConfig?.name || 'Logo Bệnh viện'}
+              className="h-9 w-auto max-w-[120px] object-contain rounded-lg bg-white p-0.5 border border-slate-200/90 shadow-xs"
+            />
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-slate-900 text-sm sm:text-base tracking-tight">
@@ -285,13 +279,11 @@ export const InternalLayout: React.FC = () => {
             <div className="relative w-64 bg-white h-full shadow-2xl flex flex-col z-10 p-4">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  {hospitalConfig?.logoUrl ? (
-                    <img
-                      src={hospitalConfig.logoUrl}
-                      alt={hospitalConfig.name || 'Logo'}
-                      className="h-7 w-auto object-contain rounded"
-                    />
-                  ) : null}
+                  <img
+                    src={hospitalConfig?.logoUrl || '/logo.png'}
+                    alt={hospitalConfig?.name || 'Logo'}
+                    className="h-7 w-auto object-contain rounded"
+                  />
                   <span className="font-bold text-slate-900 text-sm">
                     {hospitalConfig?.name || 'HTAC Hospital'}
                   </span>

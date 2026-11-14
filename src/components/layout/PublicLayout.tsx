@@ -3,6 +3,7 @@ import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/Button';
 import {
+  Activity,
   Calendar,
   Clock,
   HeartHandshake,
@@ -55,17 +56,11 @@ export const PublicLayout: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-18 flex items-center justify-between">
           {/* Logo Bệnh viện */}
           <Link to="/" className="flex items-center gap-3 group">
-            {config?.logoUrl ? (
-              <img
-                src={config.logoUrl}
-                alt={config?.name || 'Logo Bệnh viện'}
-                className="h-11 w-auto max-w-[140px] object-contain rounded-lg bg-white p-0.5 border border-slate-200/80 shadow-xs group-hover:scale-105 transition-transform"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-600 to-cyan-600 text-white flex items-center justify-center font-bold text-xl shadow-md shadow-sky-600/20 group-hover:scale-105 transition-transform">
-                +
-              </div>
-            )}
+            <img
+              src={config?.logoUrl || '/logo.png'}
+              alt={config?.name || 'Logo Bệnh viện'}
+              className="h-11 w-auto max-w-[140px] object-contain rounded-lg bg-white p-0.5 border border-slate-200/80 shadow-xs group-hover:scale-105 transition-transform"
+            />
             <div>
               <div className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight leading-tight">
                 {config?.name || 'HTAC HOSPITAL'}
@@ -113,6 +108,34 @@ export const PublicLayout: React.FC = () => {
               <Calendar className="w-4 h-4 text-cyan-500" />
               Đặt lịch khám
             </NavLink>
+            {isAuthenticated && user?.role === 'PATIENT' && (
+              <>
+                <NavLink
+                  to="/patient/appointments"
+                  className={({ isActive }) =>
+                    cn(
+                      'px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5',
+                      isActive ? 'text-sky-600 bg-sky-50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    )
+                  }
+                >
+                  <Clock className="w-4 h-4 text-emerald-500" />
+                  Lịch hẹn của tôi
+                </NavLink>
+                <NavLink
+                  to="/patient/history"
+                  className={({ isActive }) =>
+                    cn(
+                      'px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5',
+                      isActive ? 'text-sky-600 bg-sky-50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    )
+                  }
+                >
+                  <Activity className="w-4 h-4 text-sky-500" />
+                  Sổ sức khỏe
+                </NavLink>
+              </>
+            )}
           </nav>
 
           {/* Khu vực Hành động Người dùng */}
@@ -120,8 +143,9 @@ export const PublicLayout: React.FC = () => {
             {isAuthenticated && user ? (
               <div className="flex items-center gap-3">
                 <Link
-                  to={user.role === 'ADMIN' ? '/admin/dashboard' : '/booking'}
+                  to={user.role === 'ADMIN' ? '/admin/dashboard' : '/patient/appointments'}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-50 text-sky-800 text-xs font-semibold hover:bg-sky-100 transition-colors"
+                  title="Xem lịch hẹn cá nhân"
                 >
                   <User className="w-4 h-4 text-sky-600" />
                   <span>{user.fullName || user.username}</span>
@@ -173,18 +197,12 @@ export const PublicLayout: React.FC = () => {
           {/* Cột 1: Thông tin Viện */}
           <div className="space-y-3">
             <div className="flex items-center gap-2.5 font-bold text-white text-base">
-              {config?.logoUrl ? (
-                <img
-                  src={config.logoUrl}
-                  alt={config?.name || 'Logo Bệnh viện'}
-                  className="h-9 w-auto max-w-[110px] object-contain rounded-md bg-white p-0.5"
-                />
-              ) : (
-                <span className="w-6 h-6 rounded-md bg-sky-600 text-white flex items-center justify-center text-xs">
-                  +
-                </span>
-              )}
-              <span>{config?.name || 'BỆNH VIỆN ĐA KHOA HTAC'}</span>
+              <img
+                src={config?.logoUrl || '/logo.png'}
+                alt={config?.name || 'Logo Bệnh viện'}
+                className="h-9 w-auto max-w-[110px] object-contain rounded-md bg-white p-0.5"
+              />
+              <span>{config?.name || 'BỆNH VIỆN ĐA KHOA QUỐC TẾ HTAC'}</span>
             </div>
             <p className="text-slate-400 leading-relaxed">
               Cơ sở y tế tiêu chuẩn chất lượng cao, quy tụ đội ngũ bác sĩ chuyên khoa giàu kinh nghiệm và trang thiết bị hiện đại.
@@ -219,6 +237,16 @@ export const PublicLayout: React.FC = () => {
               <li>
                 <Link to="/booking" className="hover:text-white transition-colors">
                   Quy trình đặt lịch trực tuyến
+                </Link>
+              </li>
+              <li>
+                <Link to="/patient/appointments" className="hover:text-white transition-colors">
+                  Tra cứu lịch hẹn khám cá nhân
+                </Link>
+              </li>
+              <li>
+                <Link to="/patient/history" className="hover:text-white transition-colors">
+                  Sổ sức khỏe điện tử (EHR) &amp; Toa thuốc
                 </Link>
               </li>
               <li>

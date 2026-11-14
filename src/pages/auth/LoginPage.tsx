@@ -112,21 +112,15 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 antialiased selection:bg-sky-100 selection:text-sky-900">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        {/* LOGO BỆNH VIỆN */}
+        {/* LOGO BỆNH VIỆN THẬT */}
         <Link to="/" className="inline-flex flex-col items-center gap-2 mb-3 group">
-          {hospitalConfig?.logoUrl ? (
-            <img
-              src={hospitalConfig.logoUrl}
-              alt={hospitalConfig.name || 'Logo Bệnh viện'}
-              className="h-16 w-auto max-w-[200px] object-contain rounded-2xl p-1.5 bg-white border border-slate-200/90 shadow-sm group-hover:scale-105 transition-transform"
-            />
-          ) : (
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-600 to-cyan-600 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-sky-600/30 group-hover:scale-105 transition-transform">
-              +
-            </div>
-          )}
+          <img
+            src={hospitalConfig?.logoUrl || '/logo.png'}
+            alt={hospitalConfig?.name || 'Bệnh viện Đa khoa HTAC'}
+            className="h-16 w-auto max-w-[220px] object-contain rounded-2xl p-1.5 bg-white border border-slate-200/90 shadow-sm group-hover:scale-105 transition-transform"
+          />
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
-            {hospitalConfig?.name || 'HTAC Hospital'}
+            {hospitalConfig?.name || 'Bệnh viện Đa khoa Quốc tế HTAC'}
           </h1>
         </Link>
         <p className="text-xs text-slate-500 font-medium">

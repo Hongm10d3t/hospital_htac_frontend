@@ -191,19 +191,13 @@ export const PatientRegisterPage: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 antialiased selection:bg-sky-100 selection:text-sky-900">
       <div className="sm:mx-auto sm:w-full sm:max-w-2xl text-center">
         <Link to="/" className="inline-flex flex-col items-center gap-2 mb-2 group">
-          {hospitalConfig?.logoUrl ? (
-            <img
-              src={hospitalConfig.logoUrl}
-              alt={hospitalConfig.name || 'Logo Bệnh viện'}
-              className="h-14 w-auto max-w-[180px] object-contain rounded-xl p-1 bg-white border border-slate-200/90 shadow-xs group-hover:scale-105 transition-transform"
-            />
-          ) : (
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-600 to-cyan-600 text-white flex items-center justify-center font-black text-2xl shadow-md shadow-sky-600/30 group-hover:scale-105 transition-transform">
-              +
-            </div>
-          )}
+          <img
+            src={hospitalConfig?.logoUrl || '/logo.png'}
+            alt={hospitalConfig?.name || 'Bệnh viện Đa khoa HTAC'}
+            className="h-14 w-auto max-w-[200px] object-contain rounded-xl p-1 bg-white border border-slate-200/90 shadow-xs group-hover:scale-105 transition-transform"
+          />
           <span className="font-extrabold text-slate-900 text-2xl tracking-tight mt-1">
-            {hospitalConfig?.name || 'HTAC Hospital'}
+            {hospitalConfig?.name || 'Bệnh viện Đa khoa Quốc tế HTAC'}
           </span>
         </Link>
         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">

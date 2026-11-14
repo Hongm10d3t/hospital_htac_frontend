@@ -409,7 +409,27 @@ export const BookingPage: React.FC = () => {
 
             {/* PHIẾU HẸN CHI TIẾT */}
             <div className="bg-slate-50 rounded-2xl p-6 border-2 border-dashed border-slate-300 space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200">
+              {/* Header phiếu với Logo bệnh viện */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={hospitalConfig?.logoUrl || '/logo.png'}
+                    alt="Logo Bệnh viện"
+                    className="h-10 w-auto max-w-[120px] object-contain rounded-md bg-white p-0.5 border border-slate-200"
+                  />
+                  <div>
+                    <div className="font-extrabold text-slate-900 text-sm tracking-tight">
+                      {hospitalConfig?.name || 'BỆNH VIỆN ĐA KHOA QUỐC TẾ HTAC'}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-medium">
+                      Hotline: {hospitalConfig?.phone || '1900 6868'} • {hospitalConfig?.address || 'Hà Nội'}
+                    </div>
+                  </div>
+                </div>
+                <Badge status="PENDING">Chờ Tiếp đón xác nhận</Badge>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200">
                 <div>
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                     Mã Lịch Hẹn Khám
@@ -418,7 +438,6 @@ export const BookingPage: React.FC = () => {
                     {successAppointment.appointmentCode}
                   </div>
                 </div>
-                <Badge status="PENDING">Chờ Tiếp đón xác nhận</Badge>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
@@ -504,8 +523,12 @@ export const BookingPage: React.FC = () => {
                 >
                   Đặt lịch khám khác
                 </Button>
-                <Button variant="primary" onClick={() => navigate('/')}>
-                  Về Trang chủ
+                <Button
+                  variant="primary"
+                  onClick={() => navigate('/patient/appointments')}
+                  className="font-bold shadow-md shadow-sky-600/20"
+                >
+                  Xem lịch hẹn của tôi
                 </Button>
               </div>
             </div>

@@ -6,6 +6,8 @@ import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 import { HomePage } from '../pages/public/HomePage';
 import { DoctorsPage } from '../pages/public/DoctorsPage';
 import { BookingPage } from '../pages/public/BookingPage';
+import { PatientAppointmentsPage } from '../pages/patient/PatientAppointmentsPage';
+import { PatientHistoryPage } from '../pages/patient/PatientHistoryPage';
 import { LoginPage } from '../pages/auth/LoginPage';
 import { PatientRegisterPage } from '../pages/auth/PatientRegisterPage';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
@@ -33,6 +35,25 @@ export const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/patient/appointments"
+          element={
+            <ProtectedRoute allowedRoles={['PATIENT', 'ADMIN']}>
+              <PatientAppointmentsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/appointments" element={<Navigate to="/patient/appointments" replace />} />
+        <Route
+          path="/patient/history"
+          element={
+            <ProtectedRoute allowedRoles={['PATIENT', 'ADMIN']}>
+              <PatientHistoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/history" element={<Navigate to="/patient/history" replace />} />
+        <Route path="/ehr" element={<Navigate to="/patient/history" replace />} />
       </Route>
 
       {/* 2. CỔNG XÁC THỰC: ĐĂNG NHẬP & ĐĂNG KÝ BỆNH NHÂN */}
