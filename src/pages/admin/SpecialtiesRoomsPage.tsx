@@ -404,16 +404,22 @@ export const SpecialtiesRoomsPage: React.FC = () => {
         <div className="flex items-center justify-end gap-1.5">
           <button
             type="button"
-            onClick={() => openEditSpecialty(spec)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              openEditSpecialty(spec);
+            }}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition-colors cursor-pointer"
             title="Sửa thông tin"
           >
             <Edit2 className="w-4 h-4" />
           </button>
           <button
             type="button"
-            onClick={() => handleToggleSpecialtyStatus(spec)}
-            className={`p-1.5 rounded-lg transition-colors ${
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleSpecialtyStatus(spec);
+            }}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               spec.active
                 ? 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
                 : 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
@@ -495,16 +501,22 @@ export const SpecialtiesRoomsPage: React.FC = () => {
         <div className="flex items-center justify-end gap-1.5">
           <button
             type="button"
-            onClick={() => openEditRoom(r)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              openEditRoom(r);
+            }}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition-colors cursor-pointer"
             title="Sửa phòng khám"
           >
             <Edit2 className="w-4 h-4" />
           </button>
           <button
             type="button"
-            onClick={() => handleToggleRoomStatus(r)}
-            className={`p-1.5 rounded-lg transition-colors ${
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleRoomStatus(r);
+            }}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               r.active
                 ? 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
                 : 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
@@ -675,6 +687,7 @@ export const SpecialtiesRoomsPage: React.FC = () => {
           emptyMessage="Không tìm thấy chuyên khoa nào"
           currentPage={specPage}
           onPageChange={setSpecPage}
+          onRowClick={(item) => openEditSpecialty(item)}
         />
       ) : (
         <DataTable<ClinicRoomResponse>
@@ -687,6 +700,7 @@ export const SpecialtiesRoomsPage: React.FC = () => {
           emptyMessage="Không tìm thấy phòng khám nào"
           currentPage={roomPage}
           onPageChange={setRoomPage}
+          onRowClick={(item) => openEditRoom(item)}
         />
       )}
 

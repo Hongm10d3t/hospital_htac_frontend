@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   staffAccountService,
   type StaffAccountResponse,
@@ -28,6 +29,7 @@ import {
   Search,
   Shield,
   ShieldAlert,
+  Stethoscope,
   Unlock,
   User,
   UserCheck,
@@ -359,26 +361,45 @@ export const StaffAccountsPage: React.FC = () => {
       align: 'right',
       render: (item) => (
         <div className="flex items-center justify-end gap-1.5">
+          {item.role === 'DOCTOR' && (
+            <Link
+              to={`/admin/doctor-profiles?doctorId=${item.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="p-1.5 rounded-lg text-sky-600 hover:text-sky-800 hover:bg-sky-50 transition-colors"
+              title="Xem hồ sơ chuyên môn Bác sĩ"
+            >
+              <Stethoscope className="w-4 h-4" />
+            </Link>
+          )}
           <button
             type="button"
-            onClick={() => openEditDrawer(item)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              openEditDrawer(item);
+            }}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition-colors cursor-pointer"
             title="Chỉnh sửa thông tin"
           >
             <Edit2 className="w-4 h-4" />
           </button>
           <button
             type="button"
-            onClick={() => openResetModal(item)}
-            className="p-1.5 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-50 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              openResetModal(item);
+            }}
+            className="p-1.5 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-50 transition-colors cursor-pointer"
             title="Đặt lại mật khẩu"
           >
             <KeyRound className="w-4 h-4" />
           </button>
           <button
             type="button"
-            onClick={() => handleToggleActive(item)}
-            className={`p-1.5 rounded-lg transition-colors ${
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleActive(item);
+            }}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               item.active
                 ? 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
                 : 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
@@ -456,6 +477,12 @@ export const StaffAccountsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Gợi ý thao tác nhanh */}
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        <UserCheck className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+        <span>Mẹo: Bạn có thể click trực tiếp vào bất kỳ dòng nào trong bảng để xem và chỉnh sửa thông tin tài khoản nhân viên.</span>
+      </div>
+
       {/* 3. BẢNG DỮ LIỆU NHÂN VIÊN */}
       <DataTable<StaffAccountResponse>
         columns={columns}
@@ -467,6 +494,7 @@ export const StaffAccountsPage: React.FC = () => {
         emptyMessage="Không tìm thấy tài khoản nhân viên nào"
         currentPage={page}
         onPageChange={setPage}
+        onRowClick={(item) => openEditDrawer(item)}
       />
 
       {/* 4. DRAWER THÊM MỚI / CHỈNH SỬA TÀI KHOẢN */}
@@ -485,10 +513,32 @@ export const StaffAccountsPage: React.FC = () => {
           )}
 
           {editingStaff && (
-            <div className="p-3 rounded-xl bg-sky-50 border border-sky-100 text-sky-800 text-[11px] flex items-start gap-2">
-              <Shield className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
-              <div>
-                <strong>Lưu ý:</strong> Thay đổi vai trò hoặc tên đăng nhập sẽ khiến các phiên đăng nhập cũ của nhân viên này hết hiệu lực. Không thể đổi vai trò nếu nhân viên đã phát sinh hồ sơ hoặc lịch sử khám (`ROLE_LOCKED`).
+            <div className="space-y-3">
+              {editingStaff.role === 'DOCTOR' && (
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-sky-50 to-cyan-50 border border-sky-200 flex items-center justify-between shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Stethoscope className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">Hồ sơ chuyên môn Bác sĩ</div>
+                      <div className="text-[11px] text-slate-500">Xem ảnh, học hàm/học vị, thâm niên &amp; công khai</div>
+                    </div>
+                  </div>
+                  <Link
+                    to={`/admin/doctor-profiles?doctorId=${editingStaff.id}`}
+                    className="px-3 py-1.5 rounded-lg bg-white border border-sky-300 text-sky-700 text-xs font-semibold hover:bg-sky-50 transition-colors shadow-xs"
+                  >
+                    Mở hồ sơ ➔
+                  </Link>
+                </div>
+              )}
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-[11px] flex items-start gap-2">
+                <Shield className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong>Lưu ý:</strong> Thay đổi vai trò hoặc tên đăng nhập sẽ khiến các phiên đăng nhập cũ của nhân viên này hết hiệu lực. Không thể đổi vai trò nếu nhân viên đã phát sinh hồ sơ hoặc lịch sử khám (`ROLE_LOCKED`).
+                </div>
               </div>
             </div>
           )}

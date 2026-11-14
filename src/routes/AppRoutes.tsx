@@ -12,6 +12,7 @@ import { ProfilePage } from '../pages/admin/ProfilePage';
 import { HospitalConfigPage } from '../pages/admin/HospitalConfigPage';
 import { SpecialtiesRoomsPage } from '../pages/admin/SpecialtiesRoomsPage';
 import { StaffAccountsPage } from '../pages/admin/StaffAccountsPage';
+import { DoctorProfilesPage } from '../pages/admin/DoctorProfilesPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 export const AppRoutes: React.FC = () => {
@@ -42,8 +43,8 @@ export const AppRoutes: React.FC = () => {
         <Route path="hospital-config" element={<HospitalConfigPage />} />
         <Route path="specialties-rooms" element={<SpecialtiesRoomsPage />} />
         <Route path="staff-accounts" element={<StaffAccountsPage />} />
+        <Route path="doctor-profiles" element={<DoctorProfilesPage />} />
         {/* Các module F01 sẽ được triển khai chi tiết ở Giai đoạn 1 */}
-        <Route path="doctor-profiles" element={<AdminDashboardPage />} />
         <Route path="clinic-slots" element={<AdminDashboardPage />} />
         <Route path="purchase-requests" element={<AdminDashboardPage />} />
       </Route>
