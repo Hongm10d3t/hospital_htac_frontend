@@ -64,9 +64,17 @@ export const PublicLayout: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-18 flex items-center justify-between">
           {/* Logo Bệnh viện */}
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-600 to-cyan-600 text-white flex items-center justify-center font-bold text-xl shadow-md shadow-sky-600/20 group-hover:scale-105 transition-transform">
-              +
-            </div>
+            {config?.logoUrl ? (
+              <img
+                src={config.logoUrl}
+                alt={config?.name || 'Logo Bệnh viện'}
+                className="h-11 w-auto max-w-[140px] object-contain rounded-lg bg-white p-0.5 border border-slate-200/80 shadow-xs group-hover:scale-105 transition-transform"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-600 to-cyan-600 text-white flex items-center justify-center font-bold text-xl shadow-md shadow-sky-600/20 group-hover:scale-105 transition-transform">
+                +
+              </div>
+            )}
             <div>
               <div className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight leading-tight">
                 {config?.name || 'HTAC HOSPITAL'}
@@ -165,11 +173,19 @@ export const PublicLayout: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 text-xs">
           {/* Cột 1: Thông tin Viện */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 font-bold text-white text-base">
-              <span className="w-6 h-6 rounded-md bg-sky-600 text-white flex items-center justify-center text-xs">
-                +
-              </span>
-              {config?.name || 'BỆNH VIỆN ĐA KHOA HTAC'}
+            <div className="flex items-center gap-2.5 font-bold text-white text-base">
+              {config?.logoUrl ? (
+                <img
+                  src={config.logoUrl}
+                  alt={config?.name || 'Logo Bệnh viện'}
+                  className="h-9 w-auto max-w-[110px] object-contain rounded-md bg-white p-0.5"
+                />
+              ) : (
+                <span className="w-6 h-6 rounded-md bg-sky-600 text-white flex items-center justify-center text-xs">
+                  +
+                </span>
+              )}
+              <span>{config?.name || 'BỆNH VIỆN ĐA KHOA HTAC'}</span>
             </div>
             <p className="text-slate-400 leading-relaxed">
               Cơ sở y tế tiêu chuẩn chất lượng cao, quy tụ đội ngũ bác sĩ chuyên khoa giàu kinh nghiệm và trang thiết bị hiện đại.
