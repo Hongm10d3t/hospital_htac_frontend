@@ -18,6 +18,7 @@ import { StaffAccountsPage } from '../pages/admin/StaffAccountsPage';
 import { DoctorProfilesPage } from '../pages/admin/DoctorProfilesPage';
 import { ClinicSlotsPage } from '../pages/admin/ClinicSlotsPage';
 import { PurchaseRequestsPage } from '../pages/admin/PurchaseRequestsPage';
+import { ReceptionAppointmentsPage } from '../pages/reception/ReceptionAppointmentsPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 export const AppRoutes: React.FC = () => {
@@ -89,7 +90,8 @@ export const AppRoutes: React.FC = () => {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/reception/checkin" replace />} />
+        <Route index element={<Navigate to="/reception/appointments" replace />} />
+        <Route path="appointments" element={<ReceptionAppointmentsPage />} />
         <Route
           path="*"
           element={
