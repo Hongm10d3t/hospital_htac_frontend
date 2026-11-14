@@ -51,7 +51,7 @@ export const authService = {
    * Lấy thông tin cấu hình bệnh viện
    */
   async getHospitalConfig(): Promise<HospitalConfig> {
-    return api.get<HospitalConfig>('/api/v1/public/hospital-config');
+    return api.get<HospitalConfig>('/api/v1/public/hospital');
   },
 
   /**
