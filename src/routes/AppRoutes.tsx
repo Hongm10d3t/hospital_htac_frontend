@@ -25,7 +25,14 @@ export const AppRoutes: React.FC = () => {
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/doctors" element={<DoctorsPage />} />
-        <Route path="/booking" element={<BookingPage />} />
+        <Route
+          path="/booking"
+          element={
+            <ProtectedRoute allowedRoles={['PATIENT', 'ADMIN']}>
+              <BookingPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
 
       {/* 2. CỔNG XÁC THỰC: ĐĂNG NHẬP & ĐĂNG KÝ BỆNH NHÂN */}
