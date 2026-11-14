@@ -20,7 +20,6 @@ import { Modal } from '../../components/ui/Modal';
 import { DataTable, type Column } from '../../components/ui/DataTable';
 import {
   AlertTriangle,
-  CheckCircle2,
   Edit2,
   KeyRound,
   Lock,
@@ -31,7 +30,6 @@ import {
   ShieldAlert,
   Stethoscope,
   Unlock,
-  User,
   UserCheck,
   Users,
 } from 'lucide-react';

@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   Stethoscope,
   User,
-  Users,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 

@@ -10,9 +10,7 @@ import { Button } from '../../components/ui/Button';
 import {
   Building2,
   Calendar,
-  Clock,
   Eye,
-  Globe,
   ImageIcon,
   Info,
   Mail,

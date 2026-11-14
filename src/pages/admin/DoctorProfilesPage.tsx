@@ -22,22 +22,14 @@ import { Drawer } from '../../components/ui/Drawer';
 import { DataTable, type Column } from '../../components/ui/DataTable';
 import {
   AlertTriangle,
-  Award,
-  BookOpen,
-  Calendar,
-  CheckCircle2,
-  Clock,
   Edit2,
   Eye,
   EyeOff,
-  Filter,
-  Globe,
   Grid,
   Info,
   List,
   Search,
   Stethoscope,
-  User,
   X,
   ZoomIn,
 } from 'lucide-react';

@@ -19,7 +19,6 @@ import {
   Menu,
   Pill,
   Settings,
-  ShieldCheck,
   Stethoscope,
   User,
   UserCheck,

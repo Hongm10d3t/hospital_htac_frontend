@@ -22,13 +22,14 @@ export interface DataTableProps<T> {
   pageSize?: number;
   className?: string;
   onRowClick?: (item: T) => void;
+  rowKey?: keyof T | ((item: T) => string | number);
 }
 
 /**
  * Bảng dữ liệu nghiệp vụ y tế (DataTable) chuẩn hóa HTAC
  * Tối ưu mật độ thông tin cao (High-density), hỗ trợ phân trang chuẩn PageResponse, trạng thái rỗng và tải dữ liệu.
  */
-export function DataTable<T extends { id?: string | number }>({
+export function DataTable<T extends object>({
   columns,
   data,
   isLoading = false,
@@ -39,6 +40,7 @@ export function DataTable<T extends { id?: string | number }>({
   pageSize = 10,
   className,
   onRowClick,
+  rowKey,
 }: DataTableProps<T>) {
   // Chuẩn hóa dữ liệu đầu vào (hỗ trợ cả mảng tĩnh và PageResponse)
   const isPaged = data && typeof data === 'object' && 'items' in data;
@@ -92,33 +94,41 @@ export function DataTable<T extends { id?: string | number }>({
                 </td>
               </tr>
             ) : (
-              items.map((item, idx) => (
-                <tr
-                  key={item.id ?? idx}
-                  onClick={() => onRowClick?.(item)}
-                  className={cn(
-                    'transition-colors duration-100 hover:bg-sky-50/40',
-                    onRowClick && 'cursor-pointer',
-                    idx % 2 === 1 ? 'bg-slate-50/30' : 'bg-white'
-                  )}
-                >
-                  {columns.map((col) => (
-                    <td
-                      key={col.key}
-                      className={cn(
-                        'py-3 px-4 text-slate-800 align-middle',
-                        col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'
-                      )}
-                    >
-                      {col.render
-                        ? col.render(item, idx)
-                        : (item as Record<string, unknown>)[col.key] !== undefined
-                          ? String((item as Record<string, unknown>)[col.key])
-                          : '-'}
-                    </td>
-                  ))}
-                </tr>
-              ))
+              items.map((item, idx) => {
+                const trKey = rowKey
+                  ? typeof rowKey === 'function'
+                    ? rowKey(item)
+                    : String(item[rowKey])
+                  : ((item as { id?: string | number }).id ?? idx);
+
+                return (
+                  <tr
+                    key={trKey}
+                    onClick={() => onRowClick?.(item)}
+                    className={cn(
+                      'transition-colors duration-100 hover:bg-sky-50/40',
+                      onRowClick && 'cursor-pointer',
+                      idx % 2 === 1 ? 'bg-slate-50/30' : 'bg-white'
+                    )}
+                  >
+                    {columns.map((col) => (
+                      <td
+                        key={col.key}
+                        className={cn(
+                          'py-3 px-4 text-slate-800 align-middle',
+                          col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'
+                        )}
+                      >
+                        {col.render
+                          ? col.render(item, idx)
+                          : (item as Record<string, unknown>)[col.key] !== undefined
+                            ? String((item as Record<string, unknown>)[col.key])
+                            : '-'}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

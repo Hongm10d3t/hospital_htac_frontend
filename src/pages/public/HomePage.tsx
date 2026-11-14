@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Clock,
   Award,
-  ChevronRight,
   HeartPulse,
 } from 'lucide-react';
 
