@@ -4,21 +4,32 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/ui/Toast';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-import { Lock, User, ShieldCheck, Eye, EyeOff, Building2 } from 'lucide-react';
+import {
+  Lock,
+  User,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  Building2,
+  UserPlus,
+  ArrowRight,
+  KeyRound,
+} from 'lucide-react';
 import { ApiError } from '../../services/api';
 
 /**
- * Màn hình Đăng nhập Quản trị & Nhân viên Y tế (F01.01)
+ * Màn hình Đăng nhập Hợp nhất (1 Form duy nhất cho tất cả đối tượng)
  * Kết nối: POST /api/v1/public/auth/login, quản lý phiên cookie JSESSIONID và CSRF token
+ * Hiển thị Logo Bệnh viện thật từ cấu hình hệ thống
  */
 export const LoginPage: React.FC = () => {
-  const { login, isAuthenticated, user } = useAuth();
+  const { login, isAuthenticated, user, hospitalConfig } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
 
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('Htac@2026');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -26,24 +37,38 @@ export const LoginPage: React.FC = () => {
   // Lấy đường dẫn trước đó (nếu bị ProtectedRoute chặn chuyển hướng sang)
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
 
+  // Điều hướng người dùng sau khi xác thực thành công theo vai trò
+  const routeUserByRole = (role: string) => {
+    if (from) {
+      navigate(from, { replace: true });
+      return;
+    }
+    switch (role) {
+      case 'ADMIN':
+        navigate('/admin/dashboard', { replace: true });
+        break;
+      case 'DOCTOR':
+        navigate('/doctor/worklist', { replace: true });
+        break;
+      case 'RECEPTIONIST':
+        navigate('/reception/checkin', { replace: true });
+        break;
+      case 'PHARMACIST':
+        navigate('/pharmacy/dispense', { replace: true });
+        break;
+      case 'PATIENT':
+      default:
+        navigate('/booking', { replace: true });
+        break;
+    }
+  };
+
   // Nếu đã đăng nhập thì tự động chuyển hướng theo Role
   React.useEffect(() => {
     if (isAuthenticated && user) {
-      if (from) {
-        navigate(from, { replace: true });
-      } else if (user.role === 'ADMIN') {
-        navigate('/admin/dashboard', { replace: true });
-      } else if (user.role === 'DOCTOR') {
-        navigate('/doctor/worklist', { replace: true });
-      } else if (user.role === 'RECEPTIONIST') {
-        navigate('/reception/checkin', { replace: true });
-      } else if (user.role === 'PHARMACIST') {
-        navigate('/pharmacy/dispense', { replace: true });
-      } else {
-        navigate('/', { replace: true });
-      }
+      routeUserByRole(user.role);
     }
-  }, [isAuthenticated, user, navigate, from]);
+  }, [isAuthenticated, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,20 +84,7 @@ export const LoginPage: React.FC = () => {
     try {
       const loggedUser = await login({ username: username.trim(), password });
       toast.success(`Đăng nhập thành công! Xin chào ${loggedUser.fullName || loggedUser.username}`);
-
-      if (from) {
-        navigate(from, { replace: true });
-      } else if (loggedUser.role === 'ADMIN') {
-        navigate('/admin/dashboard', { replace: true });
-      } else if (loggedUser.role === 'DOCTOR') {
-        navigate('/doctor/worklist', { replace: true });
-      } else if (loggedUser.role === 'RECEPTIONIST') {
-        navigate('/reception/checkin', { replace: true });
-      } else if (loggedUser.role === 'PHARMACIST') {
-        navigate('/pharmacy/dispense', { replace: true });
-      } else {
-        navigate('/', { replace: true });
-      }
+      routeUserByRole(loggedUser.role);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 401) {
@@ -90,21 +102,39 @@ export const LoginPage: React.FC = () => {
     }
   };
 
+  // Tiện ích hỗ trợ điền nhanh tài khoản Admin cho nhà phát triển/kiểm thử
+  const fillAdminCredentials = () => {
+    setUsername('admin');
+    setPassword('Htac@2026');
+    setErrorMessage(null);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 antialiased selection:bg-sky-100 selection:text-sky-900">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 antialiased selection:bg-sky-100 selection:text-sky-900">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <Link to="/" className="inline-flex items-center gap-2.5 mb-3 group">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-600 to-cyan-600 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-sky-600/30 group-hover:scale-105 transition-transform">
-            +
-          </div>
+        {/* LOGO BỆNH VIỆN */}
+        <Link to="/" className="inline-flex flex-col items-center gap-2 mb-3 group">
+          {hospitalConfig?.logoUrl ? (
+            <img
+              src={hospitalConfig.logoUrl}
+              alt={hospitalConfig.name || 'Logo Bệnh viện'}
+              className="h-16 w-auto max-w-[200px] object-contain rounded-2xl p-1.5 bg-white border border-slate-200/90 shadow-sm group-hover:scale-105 transition-transform"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-600 to-cyan-600 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-sky-600/30 group-hover:scale-105 transition-transform">
+              +
+            </div>
+          )}
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+            {hospitalConfig?.name || 'HTAC Hospital'}
+          </h1>
         </Link>
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">HTAC Hospital</h2>
-        <p className="mt-1 text-xs text-slate-500 font-medium">
-          Cổng Đăng nhập Phân hệ Quản trị &amp; Nhân viên Y tế
+        <p className="text-xs text-slate-500 font-medium">
+          Cổng Đăng nhập Hệ thống Quản lý Bệnh viện &amp; Dịch vụ Y tế Trực tuyến
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 sm:px-10 shadow-xl shadow-slate-200/60 rounded-3xl border border-slate-200">
           <form className="space-y-4" onSubmit={handleSubmit}>
             {errorMessage && (
@@ -119,10 +149,10 @@ export const LoginPage: React.FC = () => {
               type="text"
               required
               autoComplete="username"
-              leftIcon={<User className="w-4 h-4" />}
+              leftIcon={<User className="w-4 h-4 text-slate-400" />}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Ví dụ: admin"
+              placeholder="Nhập tên đăng nhập của bạn"
             />
 
             <Input
@@ -131,7 +161,7 @@ export const LoginPage: React.FC = () => {
               type={showPassword ? 'text' : 'password'}
               required
               autoComplete="current-password"
-              leftIcon={<Lock className="w-4 h-4" />}
+              leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
               rightIcon={
                 <button
                   type="button"
@@ -160,26 +190,45 @@ export const LoginPage: React.FC = () => {
             </div>
           </form>
 
-          {/* Gợi ý tài khoản demo */}
-          <div className="mt-6 pt-5 border-t border-slate-100 space-y-3">
-            <div className="text-[11px] text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <span className="font-semibold text-slate-700 block mb-1">Tài khoản quản trị mặc định:</span>
-              <div className="flex justify-between items-center font-mono">
-                <span>Username: <strong>admin</strong></span>
-                <span>Mật khẩu: <strong>Htac@2026</strong></span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-              <span className="flex items-center gap-1.5 text-[11px]">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                Phiên bảo mật Cookie HTTP-Only
-              </span>
-              <Link to="/" className="text-sky-600 hover:underline font-medium text-xs flex items-center gap-1">
-                <Building2 className="w-3.5 h-3.5" />
-                Về Trang chủ
+          {/* DÀNH CHO BỆNH NHÂN: NÚT ĐĂNG KÝ MỚI */}
+          <div className="mt-6 pt-5 border-t border-slate-100">
+            <div className="text-center">
+              <span className="text-xs text-slate-500">Chưa có tài khoản bệnh nhân?</span>
+              <Link
+                to="/register"
+                className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-sky-300 bg-sky-50 text-sky-700 text-xs font-bold hover:bg-sky-100 transition-colors"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Đăng ký tài khoản khám mới ngay</span>
+                <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Link>
             </div>
+          </div>
+
+          {/* TIỆN ÍCH DÀNH CHO CÁN BỘ / KIỂM THỬ VIÊN: NÚT ĐIỀN NHANH ADMIN */}
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+            <button
+              type="button"
+              onClick={fillAdminCredentials}
+              className="text-[11px] text-slate-400 hover:text-sky-600 flex items-center gap-1 transition-colors cursor-pointer"
+              title="Điền thông tin tài khoản Quản trị viên (admin)"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-slate-400" />
+              <span>Điền tài khoản Admin mẫu</span>
+            </button>
+
+            <Link to="/" className="text-slate-500 hover:text-slate-800 font-medium text-xs flex items-center gap-1">
+              <Building2 className="w-3.5 h-3.5" />
+              Trang chủ
+            </Link>
+          </div>
+
+          {/* CHÂN FORM: BẢO MẬT */}
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-center text-[11px] text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              Bảo mật phiên đăng nhập Cookie HTTP-Only
+            </span>
           </div>
         </div>
       </div>

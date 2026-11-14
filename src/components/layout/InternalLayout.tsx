@@ -38,7 +38,7 @@ interface NavItem {
  * Dành cho ADMIN, RECEPTIONIST, DOCTOR, PHARMACIST với chế độ OPERATE tối ưu tốc độ và không gian thao tác.
  */
 export const InternalLayout: React.FC = () => {
-  const { user, role, logout, changePassword } = useAuth();
+  const { user, role, logout, changePassword, hospitalConfig } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -155,12 +155,22 @@ export const InternalLayout: React.FC = () => {
           </button>
 
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center font-bold tracking-tight shadow-xs">
-              H
-            </div>
+            {hospitalConfig?.logoUrl ? (
+              <img
+                src={hospitalConfig.logoUrl}
+                alt={hospitalConfig.name || 'Logo Bệnh viện'}
+                className="h-9 w-auto max-w-[120px] object-contain rounded-lg bg-white p-0.5 border border-slate-200/90 shadow-xs"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center font-bold tracking-tight shadow-xs">
+                H
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-900 text-sm sm:text-base tracking-tight">HTAC Hospital</span>
+                <span className="font-bold text-slate-900 text-sm sm:text-base tracking-tight">
+                  {hospitalConfig?.name || 'HTAC Hospital'}
+                </span>
                 <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Hệ thống trực tuyến
@@ -274,7 +284,18 @@ export const InternalLayout: React.FC = () => {
             />
             <div className="relative w-64 bg-white h-full shadow-2xl flex flex-col z-10 p-4">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <span className="font-bold text-slate-900">Phân hệ nghiệp vụ</span>
+                <div className="flex items-center gap-2">
+                  {hospitalConfig?.logoUrl ? (
+                    <img
+                      src={hospitalConfig.logoUrl}
+                      alt={hospitalConfig.name || 'Logo'}
+                      className="h-7 w-auto object-contain rounded"
+                    />
+                  ) : null}
+                  <span className="font-bold text-slate-900 text-sm">
+                    {hospitalConfig?.name || 'HTAC Hospital'}
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(false)}

@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { authService, type HospitalConfig } from '../../services/authService';
 import { Button } from '../ui/Button';
 import {
   Calendar,
@@ -21,16 +20,8 @@ import { cn } from '../../lib/utils';
  * Chế độ PERSUADE & SERVICE: Thân thiện, tạo cảm giác an tâm y tế, tối ưu trải nghiệm di động.
  */
 export const PublicLayout: React.FC = () => {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, hospitalConfig: config } = useAuth();
   const navigate = useNavigate();
-  const [config, setConfig] = useState<HospitalConfig | null>(null);
-
-  useEffect(() => {
-    authService
-      .getHospitalConfig()
-      .then(setConfig)
-      .catch((err) => console.warn('[PublicLayout] Chưa tải được cấu hình viện:', err));
-  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-800 antialiased selection:bg-sky-100 selection:text-sky-900">
@@ -129,7 +120,7 @@ export const PublicLayout: React.FC = () => {
             {isAuthenticated && user ? (
               <div className="flex items-center gap-3">
                 <Link
-                  to={user.role === 'ADMIN' ? '/admin/dashboard' : '/patient/history'}
+                  to={user.role === 'ADMIN' ? '/admin/dashboard' : '/booking'}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-50 text-sky-800 text-xs font-semibold hover:bg-sky-100 transition-colors"
                 >
                   <User className="w-4 h-4 text-sky-600" />
@@ -148,6 +139,14 @@ export const PublicLayout: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => navigate('/login')}>
                   Đăng nhập
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/register')}
+                  className="hidden sm:inline-flex border-sky-300 text-sky-700 bg-sky-50 hover:bg-sky-100"
+                >
+                  Đăng ký
                 </Button>
                 <Button
                   variant="primary"
@@ -223,8 +222,13 @@ export const PublicLayout: React.FC = () => {
                 </Link>
               </li>
               <li>
+                <Link to="/register" className="hover:text-white transition-colors">
+                  Đăng ký tài khoản bệnh nhân
+                </Link>
+              </li>
+              <li>
                 <Link to="/login" className="hover:text-white transition-colors">
-                  Cổng đăng nhập nhân viên y tế
+                  Cổng đăng nhập hệ thống
                 </Link>
               </li>
             </ul>

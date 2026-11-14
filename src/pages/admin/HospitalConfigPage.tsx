@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   hospitalConfigService,
   type HospitalConfig,
@@ -30,6 +31,7 @@ import { ApiError } from '../../services/api';
  */
 export const HospitalConfigPage: React.FC = () => {
   const toast = useToast();
+  const { refreshHospitalConfig } = useAuth();
 
   const [initialLoading, setInitialLoading] = useState(true);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -146,6 +148,7 @@ export const HospitalConfigPage: React.FC = () => {
     try {
       const updated = await hospitalConfigService.updateHospitalConfig(payload);
       setOriginalConfig(updated);
+      await refreshHospitalConfig();
       toast.success('Cập nhật cấu hình bệnh viện thành công! Dữ liệu đã được áp dụng toàn hệ thống.');
     } catch (err) {
       if (err instanceof ApiError) {

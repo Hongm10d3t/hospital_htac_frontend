@@ -7,6 +7,7 @@ import { HomePage } from '../pages/public/HomePage';
 import { DoctorsPage } from '../pages/public/DoctorsPage';
 import { BookingPage } from '../pages/public/BookingPage';
 import { LoginPage } from '../pages/auth/LoginPage';
+import { PatientRegisterPage } from '../pages/auth/PatientRegisterPage';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
 import { ProfilePage } from '../pages/admin/ProfilePage';
 import { HospitalConfigPage } from '../pages/admin/HospitalConfigPage';
@@ -27,8 +28,9 @@ export const AppRoutes: React.FC = () => {
         <Route path="/booking" element={<BookingPage />} />
       </Route>
 
-      {/* 2. CỔNG ĐĂNG NHẬP XÁC THỰC */}
+      {/* 2. CỔNG XÁC THỰC: ĐĂNG NHẬP & ĐĂNG KÝ BỆNH NHÂN */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<PatientRegisterPage />} />
 
       {/* 3. PHÂN HỆ QUẢN TRỊ VIÊN (ADMIN PORTAL - ROLE: ADMIN) */}
       <Route

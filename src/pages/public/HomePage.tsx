@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { authService, type HospitalConfig } from '../../services/authService';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   publicDoctorService,
   type DoctorPublicResponse,
@@ -33,14 +33,12 @@ import { resolveAvatarSrc, cn } from '../../lib/utils';
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const [config, setConfig] = useState<HospitalConfig | null>(null);
+  const { hospitalConfig: config } = useAuth();
   const [featuredDoctors, setFeaturedDoctors] = useState<DoctorPublicResponse[]>([]);
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
 
-  // Nạp cấu hình viện và danh sách bác sĩ tiêu biểu
+  // Nạp danh sách bác sĩ tiêu biểu
   useEffect(() => {
-    authService.getHospitalConfig().then(setConfig).catch(console.warn);
-
     setIsLoadingDoctors(true);
     publicDoctorService
       .listDoctors({ size: 6, sort: 'practiceStartYear,ASC' })

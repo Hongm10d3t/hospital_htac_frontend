@@ -5,12 +5,15 @@ import {
   type UpdateProfileRequest,
   type ChangePasswordRequest,
   type UserRole,
+  type HospitalConfig,
 } from '../services/authService';
 import { type AccountResponse, ApiError } from '../services/api';
 
 export interface AuthContextType {
   user: AccountResponse | null;
   role: UserRole | null;
+  hospitalConfig: HospitalConfig | null;
+  refreshHospitalConfig: () => Promise<HospitalConfig | null>;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -26,8 +29,38 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AccountResponse | null>(null);
+  const [hospitalConfig, setHospitalConfig] = useState<HospitalConfig | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Tải và làm mới thông tin cấu hình bệnh viện (tên, logo, hotline, địa chỉ)
+   */
+  const refreshHospitalConfig = useCallback(async (): Promise<HospitalConfig | null> => {
+    try {
+      const config = await authService.getHospitalConfig();
+      setHospitalConfig(config);
+
+      // Cập nhật tiêu đề trang
+      if (config.name) {
+        document.title = `${config.name} - Hệ thống Quản lý Bệnh viện Đa khoa`;
+      }
+
+      // Cập nhật Favicon nếu có logo viện
+      if (config.logoUrl) {
+        const link = (document.querySelector("link[rel*='icon']") as HTMLLinkElement) || document.createElement('link');
+        link.type = 'image/x-icon';
+        link.rel = 'shortcut icon';
+        link.href = config.logoUrl;
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+
+      return config;
+    } catch (err) {
+      console.warn('[AuthContext] Không thể tải cấu hình bệnh viện:', err);
+      return null;
+    }
+  }, []);
 
   /**
    * Tải và làm mới thông tin tài khoản hiện tại từ session cookie
@@ -52,11 +85,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   /**
-   * Khởi tạo: kiểm tra phiên đăng nhập tự động khi tải trang
+   * Khởi tạo: kiểm tra phiên đăng nhập và tải cấu hình bệnh viện khi tải trang
    */
   useEffect(() => {
     refreshUser();
-  }, [refreshUser]);
+    refreshHospitalConfig();
+  }, [refreshUser, refreshHospitalConfig]);
 
   /**
    * Đăng nhập tài khoản
@@ -141,6 +175,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     () => ({
       user,
       role: user?.role || null,
+      hospitalConfig,
+      refreshHospitalConfig,
       isAuthenticated: !!user,
       isLoading,
       error,
@@ -151,7 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       changePassword,
       hasRole,
     }),
-    [user, isLoading, error, login, logout, refreshUser, updateProfile, changePassword, hasRole]
+    [user, hospitalConfig, refreshHospitalConfig, isLoading, error, login, logout, refreshUser, updateProfile, changePassword, hasRole]
   );
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
