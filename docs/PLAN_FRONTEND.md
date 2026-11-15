@@ -22,19 +22,19 @@ Kết nối với: `backend_his` (Java 25, Spring Boot 4.1.2, MySQL 8.0, 9 modul
 ## 2. Tổng quan các giai đoạn phát triển
 
 ```
-[F00] Nền tảng, Design System & Định tuyến
+[F00] Nền tảng, Design System & Định tuyến ──────────────► [ĐÃ HOÀN THÀNH 100%]
   │
-  ├──► [F01] Phân hệ Quản trị (ADMIN Portal) ───► (ƯU TIÊN 1)
+  ├──► [F01] Phân hệ Quản trị (ADMIN Portal) ──────────────► [ĐÃ HOÀN THÀNH 100%]
   │
-  ├──► [F02] Cổng Bệnh nhân (PATIENT Portal) ────► (ƯU TIÊN 2)
+  ├──► [F02] Cổng Bệnh nhân (PATIENT Portal) ──────────────► [ĐÃ HOÀN THÀNH 100%]
   │
-  ├──► [F03] Phân hệ Tiếp đón (RECEPTIONIST Portal)
+  ├──► [F03] Phân hệ Tiếp đón (RECEPTIONIST Portal) ────────► [ĐÃ HOÀN THÀNH 100%]
   │
-  ├──► [F04] Phân hệ Bác sĩ Khám & Kê đơn (DOCTOR Portal)
+  ├──► [F04] Phân hệ Bác sĩ Khám & Kê đơn (DOCTOR Portal) ──► [ĐÃ HOÀN THÀNH 100%]
   │
-  ├──► [F05] Phân hệ Dược & Kho thuốc (PHARMACIST Portal)
+  ├──► [F05] Phân hệ Dược & Kho thuốc (PHARMACIST Portal) ─► [ĐÃ HOÀN THÀNH 100%]
   │
-  ├──► [F06] Báo cáo Thống kê & Dự báo ML
+  ├──► [F06] Báo cáo Thống kê & Dự báo ML ─────────────────► (TIẾP THEO)
   │
   └──► [F07] Tích hợp E2E, Tinh chỉnh UI/UX & Đóng gói
 ```
@@ -160,25 +160,25 @@ Mục tiêu: Xây dựng bàn làm việc chuyên môn cho Bác sĩ, tập trung
 
 ---
 
-### GIAI ĐOẠN 5: PHÂN HỆ DƯỢC SĨ & KHO THUỐC (PHARMACIST PORTAL) (F05)
+### GIAI ĐOẠN 5: PHÂN HỆ DƯỢC SĨ & KHO THUỐC (PHARMACIST PORTAL) (F05) - [ĐÃ HOÀN THÀNH 100%]
 
 Mục tiêu: Quản lý toàn diện vòng đời của thuốc từ nhập kho, lưu kho theo lô - hạn dùng, kiểm kê cho đến cấp phát đơn ngoại trú.
 
-* **F05.01 — Danh mục Thuốc, Nhà cung cấp & Lô thuốc (Catalog & Batches)**
-  * Kết nối API: `GET /api/v1/pharmacy/medicines`, `POST`, `PUT`; `GET /api/v1/pharmacy/suppliers`; `GET /api/v1/pharmacy/batches`, `PATCH /{id}/block`, `PATCH /{id}/unblock`.
-  * Nhiệm vụ: Bảng tra cứu danh mục thuốc, ngưỡng tồn an toàn (`minimum_stock`), thời gian chờ hàng; quản lý nhà cung cấp; quản lý số lô, hạn sử dụng và khóa lô thuốc có vấn đề (`BLOCKED`).
-* **F05.02 — Bàn Cấp phát thuốc Ngoại trú (Outpatient Dispensing)**
-  * Kết nối API: `GET /api/v1/pharmacy/prescriptions/pending-dispense`, `POST /{id}/dispense`, `POST /{id}/unfilled`, `POST /{id}/return`.
-  * Nhiệm vụ: Danh sách đơn thuốc `ISSUED` đang chờ lấy thuốc; tự động gợi ý xuất từ lô `ACTIVE` còn hạn dùng gần nhất (FEFO) và có tồn khả dụng; ghi nhận cấp thuốc; ghi nhận phần thuốc chưa nhận kèm lý do (`STOCKOUT`, `DECLINED`,...); xử lý nhận thuốc bệnh nhân trả vào khu vực cách ly (`QUARANTINE`).
-* **F05.03 — Quản lý Phiếu Kho nghiệp vụ (Stock Documents)**
-  * Kết nối API: `GET /api/v1/pharmacy/stock-documents`, `POST`, `POST /{id}/post`, `POST /{id}/cancel`.
-  * Nhiệm vụ: Tạo và quản lý các loại phiếu kho: Nhập kho (`RECEIPT`), Chuyển kho giữa Kho chính và Quầy phát (`TRANSFER`), Kiểm kê điều chỉnh chênh lệch (`ADJUSTMENT`), Hủy thuốc hỏng/hết hạn (`DISPOSAL`); thao tác Ghi sổ (`POSTED`) để chính thức cập nhật tồn kho.
-* **F05.04 — Lập Đề xuất Mua thuốc (Purchase Requests)**
-  * Kết nối API: `GET /api/v1/procurement/purchase-requests`, `POST`, `POST /{id}/submit`, `PATCH /{id}/order`, `POST /{id}/close`.
-  * Nhiệm vụ: Lập đề xuất nhập hàng khi thuốc dưới ngưỡng tồn; chọn nhà cung cấp và số lượng cần mua; gửi duyệt `PENDING`; cập nhật ngày đặt hàng và theo dõi nhận hàng thực tế theo từng đợt phiếu nhập.
-* **F05.05 — Báo cáo Tồn kho & Cảnh báo Y tế**
-  * Kết nối API: `GET /api/v1/pharmacy/inventory/summary`, `GET /api/v1/pharmacy/inventory/batches`, `GET /api/v1/pharmacy/inventory/alerts`.
-  * Nhiệm vụ: Bảng điều khiển trực quan lượng tồn kho thực tế (tách biệt tồn khả dụng và tồn cách ly); danh sách cảnh báo đỏ cho các thuốc chạm ngưỡng tối thiểu và lô thuốc sắp hết hạn (< 30 ngày).
+* **F05.01 — Danh mục Thuốc, Nhà cung cấp & Lô thuốc (Catalog & Batches)** - [ĐÃ HOÀN THÀNH]
+  * Kết nối API: `GET /api/v1/pharmacy/medicines`, `POST`, `PUT`; `GET /api/v1/pharmacy/suppliers`, `POST`, `PUT`; `GET /api/v1/pharmacy/batches`, `POST`, `PUT`.
+  * Nhiệm vụ: Bảng tra cứu danh mục thuốc, ngưỡng tồn an toàn (`minimumStock`), thời gian chờ hàng; quản lý nhà cung cấp; quản lý số lô, hạn sử dụng và khóa/mở khóa lô thuốc (`BLOCKED`/`ACTIVE`). File: `PharmacyMedicinesPage.tsx`, `pharmacyCatalogService.ts`.
+* **F05.02 — Bàn Cấp phát thuốc Ngoại trú (Outpatient Dispensing)** - [ĐÃ HOÀN THÀNH]
+  * Kết nối API: `GET /api/v1/pharmacy/prescriptions/{id}/dispensing`, `POST /api/v1/pharmacy/stock-documents/dispensations`, `POST /api/v1/pharmacy/stock-documents/{id}/post`, `POST /api/v1/pharmacy/prescriptions/{id}/dispensing-review`, `POST /api/v1/pharmacy/stock-documents/patient-returns`, `GET /api/v1/reports/prescriptions/{id}/dispense-lines`.
+  * Nhiệm vụ: Tra cứu nhanh đơn thuốc theo ID/Mã đơn; hiển thị tiến độ cấp phát (100% / đang phát); tự động gợi ý phân bổ lô Quầy phát (`COUNTER / AVAILABLE`) theo FEFO; xuất phát và tự động ghi sổ kho; rà soát ghi nhận thuốc chưa nhận (`STOCKOUT`, `DECLINED`, `EXTERNAL`, `OTHER`); tiếp nhận người bệnh trả thuốc nhập kho cách ly (`COUNTER / QUARANTINE`); in phiếu xuất kho cấp phát. File: `PharmacyDispensePage.tsx`, `pharmacyDispenseService.ts`.
+* **F05.03 — Quản lý Phiếu Kho nghiệp vụ (Stock Documents)** - [ĐÃ HOÀN THÀNH]
+  * Kết nối API: `GET /api/v1/pharmacy/stock-documents/{id}`, `POST /openings`, `POST /receipts`, `POST /transfers`, `POST /adjustments`, `POST /disposals`, `POST /supplier-returns`, `POST /{id}/post`, `POST /{id}/cancel`, `GET /api/v1/reports/stock-movement-lines`.
+  * Nhiệm vụ: Tạo và quản lý các loại phiếu kho nghiệp vụ với giao diện tab đa chức năng: Nhập kho NCC (`RECEIPT`), Điều chuyển kho nội bộ `MAIN ➔ COUNTER` (`TRANSFER`), Kiểm kê cân kho đối chiếu tồn sổ sách vs thực tế (`ADJUSTMENT`), Xuất hủy thuốc hỏng/hết hạn (`DISPOSAL`), Xuất trả NCC (`SUPPLIER_RETURN`), Nhập tồn đầu kỳ (`OPENING`); thao tác Ghi sổ (`POSTED`) hoặc Hủy nháp (`CANCELLED`); nhật ký biến động kho chi tiết. File: `PharmacyStockDocumentsPage.tsx`, `pharmacyStockDocumentService.ts`.
+* **F05.04 — Lập Đề xuất Mua thuốc (Purchase Requests cho Dược sĩ)** - [ĐÃ HOÀN THÀNH]
+  * Kết nối API: `GET /api/v1/procurement/purchase-requests`, `POST`, `PUT /{id}`, `POST /{id}/submit`, `POST /{id}/cancel`, `POST /{id}/order`, `POST /{id}/close`.
+  * Nhiệm vụ: Lập đề xuất dự trù mua thuốc (`DRAFT`); chỉnh sửa và gửi duyệt lên Ban Giám đốc (`PENDING`); ghi nhận đặt hàng nhà cung cấp (`orderedAt`, `expectedDeliveryDate`); liên kết tạo phiếu nhập kho; đóng hoàn tất đề xuất (`CLOSED`). File: `PharmacyPurchaseRequestsPage.tsx`, `purchaseRequestService.ts`.
+* **F05.05 — Báo cáo Tồn kho & Cảnh báo Y tế (Inventory & Alerts)** - [ĐÃ HOÀN THÀNH]
+  * Kết nối API: `GET /api/v1/pharmacy/inventory`, `GET /api/v1/pharmacy/inventory/medicines/{id}`, `GET /api/v1/pharmacy/inventory/batches/{id}/movements`.
+  * Nhiệm vụ: Bảng điều khiển KPI tồn kho 4 chỉ số; phân tách rõ Tồn vật lý và Tồn khả dụng xét cấp; cảnh báo đỏ mặt hàng dưới ngưỡng dự trữ tối thiểu (`belowMinimum`); cảnh báo cam/đỏ các lô thuốc sắp hoặc đã hết hạn (`expiryAlerts`); xem chi tiết phân bổ vị trí tồn (`MAIN / AVAILABLE`, `COUNTER / AVAILABLE`, `COUNTER / QUARANTINE`); tra cứu thẻ kho lịch sử giao dịch phát sinh từng lô thuốc; in báo cáo kiểm kê tồn kho. File: `PharmacyInventoryPage.tsx`, `pharmacyInventoryService.ts`.
 
 ---
 

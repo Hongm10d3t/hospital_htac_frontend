@@ -25,6 +25,11 @@ import { ReceptionQueuePage } from '../pages/reception/ReceptionQueuePage';
 import { DoctorWorklistPage } from '../pages/doctor/DoctorWorklistPage';
 import { DoctorRecordsPage } from '../pages/doctor/DoctorRecordsPage';
 import { DoctorMedicinesPage } from '../pages/doctor/DoctorMedicinesPage';
+import { PharmacyMedicinesPage } from '../pages/pharmacy/PharmacyMedicinesPage';
+import { PharmacyDispensePage } from '../pages/pharmacy/PharmacyDispensePage';
+import { PharmacyStockDocumentsPage } from '../pages/pharmacy/PharmacyStockDocumentsPage';
+import { PharmacyPurchaseRequestsPage } from '../pages/pharmacy/PharmacyPurchaseRequestsPage';
+import { PharmacyInventoryPage } from '../pages/pharmacy/PharmacyInventoryPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 export const AppRoutes: React.FC = () => {
@@ -140,10 +145,15 @@ export const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<Navigate to="/pharmacy/dispense" replace />} />
+        <Route path="dispense" element={<PharmacyDispensePage />} />
+        <Route path="medicines" element={<PharmacyMedicinesPage />} />
+        <Route path="stock-documents" element={<PharmacyStockDocumentsPage />} />
+        <Route path="purchase-requests" element={<PharmacyPurchaseRequestsPage />} />
+        <Route path="inventory" element={<PharmacyInventoryPage />} />
         <Route
           path="*"
           element={
-            <div className="p-8 text-center text-slate-500">Phân hệ Dược &amp; Cấp phát thuốc (F05)</div>
+            <div className="p-8 text-center text-slate-500">Trang Dược phẩm không tồn tại</div>
           }
         />
       </Route>

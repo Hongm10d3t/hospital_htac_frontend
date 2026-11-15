@@ -8,6 +8,7 @@ import { Button } from '../ui/Button';
 import { useToast } from '../ui/Toast';
 import {
   Activity,
+  Boxes,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -90,6 +91,7 @@ export const InternalLayout: React.FC = () => {
         { to: '/pharmacy/medicines', label: 'Danh mục & Lô thuốc', icon: <ClipboardList className="w-5 h-5" /> },
         { to: '/pharmacy/stock-documents', label: 'Phiếu kho nghiệp vụ', icon: <FileText className="w-5 h-5" /> },
         { to: '/pharmacy/purchase-requests', label: 'Đề xuất mua thuốc', icon: <Settings className="w-5 h-5" /> },
+        { to: '/pharmacy/inventory', label: 'Tồn kho & Cảnh báo', icon: <Boxes className="w-5 h-5" /> },
       ];
     }
 

@@ -34,6 +34,23 @@ export interface PurchaseRequestResponse {
   items: PurchaseRequestLineResponse[];
 }
 
+export interface PurchaseRequestLineWrite {
+  medicineId: number;
+  quantity: number;
+  note?: string;
+}
+
+export interface PurchaseRequestWrite {
+  supplierId: number;
+  note?: string;
+  items: PurchaseRequestLineWrite[];
+}
+
+export interface PurchaseOrderRequest {
+  orderedAt: string; // ISO OffsetDateTime
+  expectedDeliveryDate: string; // "YYYY-MM-DD"
+}
+
 export interface PurchaseDecisionRequest {
   reason?: string;
 }
@@ -47,12 +64,7 @@ export interface PurchaseRequestFilterParams {
 }
 
 /**
- * Service Quản lý & Phê duyệt Đề xuất Nhập thuốc (F01.07 - M07 Procurement)
- * Kết nối các API:
- * - GET /api/v1/procurement/purchase-requests
- * - GET /api/v1/procurement/purchase-requests/{id}
- * - POST /api/v1/procurement/purchase-requests/{id}/approve
- * - POST /api/v1/procurement/purchase-requests/{id}/reject
+ * Service Quản lý & Phê duyệt Đề xuất Nhập thuốc (F01.07 & F05.04 - M07 Procurement)
  */
 export const purchaseRequestService = {
   /**
@@ -76,6 +88,51 @@ export const purchaseRequestService = {
    */
   async getRequest(id: number): Promise<PurchaseRequestResponse> {
     return api.get<PurchaseRequestResponse>(`/api/v1/procurement/purchase-requests/${id}`);
+  },
+
+  /**
+   * Tạo mới đề xuất mua thuốc (chuyển sang trạng thái DRAFT)
+   */
+  async createRequest(body: PurchaseRequestWrite): Promise<PurchaseRequestResponse> {
+    return api.post<PurchaseRequestResponse>('/api/v1/procurement/purchase-requests', body);
+  },
+
+  /**
+   * Sửa đề xuất mua thuốc khi còn là DRAFT
+   */
+  async updateRequest(id: number, body: PurchaseRequestWrite): Promise<PurchaseRequestResponse> {
+    return api.put<PurchaseRequestResponse>(`/api/v1/procurement/purchase-requests/${id}`, body);
+  },
+
+  /**
+   * Gửi đề xuất mua thuốc lên Ban Giám đốc duyệt (DRAFT -> PENDING)
+   */
+  async submitRequest(id: number): Promise<PurchaseRequestResponse> {
+    return api.post<PurchaseRequestResponse>(`/api/v1/procurement/purchase-requests/${id}/submit`);
+  },
+
+  /**
+   * Hủy đề xuất mua thuốc (DRAFT/PENDING -> CANCELLED)
+   */
+  async cancelRequest(id: number): Promise<PurchaseRequestResponse> {
+    return api.post<PurchaseRequestResponse>(`/api/v1/procurement/purchase-requests/${id}/cancel`);
+  },
+
+  /**
+   * Đặt hàng nhà cung cấp (sau khi được duyệt APPROVED)
+   */
+  async orderRequest(id: number, body: PurchaseOrderRequest): Promise<PurchaseRequestResponse> {
+    return api.post<PurchaseRequestResponse>(`/api/v1/procurement/purchase-requests/${id}/order`, body);
+  },
+
+  /**
+   * Đóng đề xuất mua thuốc (sau khi đã nhận đủ hàng)
+   */
+  async closeRequest(id: number, reason?: string): Promise<PurchaseRequestResponse> {
+    return api.post<PurchaseRequestResponse>(
+      `/api/v1/procurement/purchase-requests/${id}/close`,
+      reason ? { reason: reason.trim() } : {}
+    );
   },
 
   /**
