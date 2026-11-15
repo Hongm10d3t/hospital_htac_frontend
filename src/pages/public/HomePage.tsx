@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { HeroBannerSlider } from '../../components/home/HeroBannerSlider';
 import {
   publicDoctorService,
   type DoctorPublicResponse,
@@ -14,19 +15,15 @@ import {
   Award,
   HeartPulse,
   PhoneCall,
-  MapPin,
   ChevronRight,
   FileText,
   Pill,
-  Sparkles,
   ArrowRight,
   HelpCircle,
   Activity,
   Heart,
   Eye,
   Baby,
-  Star,
-  UserCheck,
   CheckCircle2,
 } from 'lucide-react';
 import { resolveAvatarSrc, cn } from '../../lib/utils';
@@ -109,189 +106,9 @@ export const HomePage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-20 pb-20">
-      {/* 1. HERO BANNER SECTION (KÈM BACKGROUND Y TẾ & ẢNH MINH HỌA THỰC TẾ) */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-sky-50/90 via-blue-50/40 to-slate-50 border-b border-slate-200/80 py-16 sm:py-24">
-        {/* Họa tiết lưới y tế tinh tế chìm dưới nền (Medical Dot Grid Pattern) */}
-        <div
-          className="absolute inset-0 pointer-events-none opacity-[0.25]"
-          style={{
-            backgroundImage: 'radial-gradient(#0284c7 0.75px, transparent 0.75px)',
-            backgroundSize: '24px 24px',
-          }}
-        />
-
-        {/* Vòng sáng xanh dịu (Ambient Glow Orbs) */}
-        <div className="absolute top-10 left-1/4 w-96 h-96 bg-sky-200/40 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-10 right-10 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            {/* Cột trái: Logo, Thông điệp & Nút CTA */}
-            <div className="lg:col-span-7 space-y-6">
-              {/* Logo Bệnh viện thật */}
-              <div className="inline-flex items-center gap-3 p-2 pr-4 bg-white/90 backdrop-blur-xs rounded-2xl border border-slate-200/90 shadow-xs">
-                <img
-                  src={config?.logoUrl || '/logo.png'}
-                  alt={config?.name || 'Logo Bệnh viện'}
-                  className="h-12 w-auto max-w-[140px] object-contain rounded-xl"
-                />
-                <div className="border-l border-slate-200 pl-3">
-                  <div className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    {config?.name || 'Bệnh viện Đa khoa Quốc tế HTAC'}
-                  </div>
-                  <div className="text-[10px] text-slate-500 font-medium">
-                    Hệ thống Quản lý Y tế Kỹ thuật cao
-                  </div>
-                </div>
-              </div>
-
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-100/80 text-blue-800 text-xs font-bold border border-blue-200/80 shadow-2xs">
-                <Sparkles className="w-4 h-4 text-blue-600" />
-                Hệ thống Y tế Đa khoa Chất lượng cao • Đặt khám thông minh
-              </div>
-
-              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight">
-                Chăm sóc sức khỏe{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-700 via-sky-600 to-blue-800">
-                  toàn diện &amp; tận tâm
-                </span>
-              </h1>
-
-              <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl">
-                {config?.description ||
-                  'Bệnh viện Đa khoa HTAC quy tụ đội ngũ hơn 62 Giáo sư, Bác sĩ chuyên khoa đầu ngành. Hệ thống bệnh án điện tử và đặt lịch trực tuyến thông minh giúp người bệnh hoàn toàn chủ động thời gian thăm khám.'}
-              </p>
-
-              {/* Thông tin hotline & vị trí nhanh */}
-              <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-slate-600 py-1">
-                <div className="flex items-center gap-1.5 font-bold text-rose-600 bg-rose-50 px-3 py-1 rounded-lg border border-rose-100">
-                  <PhoneCall className="w-4 h-4" />
-                  <span>Cấp cứu 24/7: {config?.phone || '024 7308 6868'}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-slate-600 bg-white/80 px-3 py-1 rounded-lg border border-slate-200">
-                  <MapPin className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>{config?.address || 'Số 18 Nguyễn Văn Huyên, Nghĩa Đô, Cầu Giấy, Hà Nội'}</span>
-                </div>
-              </div>
-
-              {/* Nhóm nút hành động chính */}
-              <div className="flex flex-wrap items-center gap-3.5 pt-2">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  leftIcon={<Calendar className="w-5 h-5" />}
-                  onClick={() => navigate('/booking')}
-                  className="shadow-lg shadow-blue-700/25 text-base px-6 py-3 font-bold"
-                >
-                  Đặt lịch khám trực tuyến
-                </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  leftIcon={<Stethoscope className="w-5 h-5" />}
-                  onClick={() => navigate('/doctors')}
-                  className="text-base px-6 py-3 font-semibold bg-white"
-                >
-                  Đội ngũ 62 Bác sĩ
-                </Button>
-              </div>
-            </div>
-
-            {/* Cột phải: Thẻ tóm tắt thông số & Hình ảnh thật của đội ngũ y khoa */}
-            <div className="lg:col-span-5 relative">
-              <div className="relative mx-auto max-w-md bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xl space-y-6">
-                {/* Header thẻ: Logo viện thật */}
-                <div className="flex items-center gap-3.5 pb-4 border-b border-slate-100">
-                  <img
-                    src={config?.logoUrl || '/logo.png'}
-                    alt={config?.name || 'Logo Bệnh viện'}
-                    className="w-14 h-14 object-contain rounded-2xl bg-white p-1 border border-slate-200 shadow-xs shrink-0"
-                  />
-                  <div>
-                    <h3 className="font-extrabold text-slate-900 text-lg leading-tight">
-                      {config?.name || 'Bệnh viện Đa khoa Quốc tế HTAC'}
-                    </h3>
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold mt-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                      <span>Đang mở cổng tiếp đón bệnh nhân</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Khối ảnh thật minh họa đội ngũ Bác sĩ tiêu biểu của Viện */}
-                <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <Stethoscope className="w-4 h-4 text-blue-600" />
-                      Bác sĩ chuyên khoa tiêu biểu
-                    </span>
-                    <span className="text-blue-600 font-semibold">62+ Chuyên gia</span>
-                  </div>
-
-                  {/* Nhóm avatar thật của các bác sĩ */}
-                  <div className="flex items-center -space-x-2.5 overflow-hidden py-1">
-                    {[
-                      '/image_doctors/doctor-001.jpg',
-                      '/image_doctors/doctor-002.png',
-                      '/image_doctors/doctor-003.jpg',
-                      '/image_doctors/doctor-004.jpg',
-                      '/image_doctors/doctor-005.jpg',
-                    ].map((avatar, idx) => (
-                      <img
-                        key={idx}
-                        src={avatar}
-                        alt="Bác sĩ HTAC"
-                        className="inline-block w-11 h-11 rounded-full ring-2 ring-white object-cover shadow-xs"
-                      />
-                    ))}
-                    <div className="w-11 h-11 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center ring-2 ring-white shadow-xs">
-                      +57
-                    </div>
-                  </div>
-
-                  <div className="text-[11px] text-slate-500 leading-relaxed flex items-center gap-1.5">
-                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
-                    <span>Đánh giá 4.9/5 sao từ hơn 15.000+ bệnh nhân đã khám chữa bệnh</span>
-                  </div>
-                </div>
-
-                {/* Các chỉ số cam kết dịch vụ */}
-                <div className="space-y-2.5">
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-medium flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4 text-blue-600" />
-                      Đặt lịch hẹn trước:
-                    </span>
-                    <span className="font-bold text-blue-700">
-                      Tối đa {config?.advanceBookingDays || 14} ngày
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-medium flex items-center gap-1.5">
-                      <UserCheck className="w-4 h-4 text-emerald-600" />
-                      Tiếp đón tại viện:
-                    </span>
-                    <span className="font-bold text-emerald-700">Chỉ 30 giây qua CCCD/SĐT</span>
-                  </div>
-                </div>
-
-                <div className="p-3.5 bg-gradient-to-r from-sky-50 to-blue-50 rounded-2xl border border-blue-100 text-xs text-blue-900 space-y-1">
-                  <div className="font-bold text-blue-800 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" />
-                    Không xếp hàng chờ đợi
-                  </div>
-                  <p className="text-blue-700 leading-relaxed text-[11px]">
-                    Hệ thống phân ca và cấp số tự động theo khung giờ giúp bạn và người nhà tiết kiệm
-                    tối đa thời gian tại bệnh viện.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+    <div className="space-y-16 sm:space-y-20 pb-20 relative">
+      {/* 1. HERO BANNER SLIDER & THANH TIỆN ÍCH THEO MẪU BỆNH VIỆN BẠCH MAI */}
+      <HeroBannerSlider />
 
       {/* 2. STATS OVERVIEW SECTION */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8">
@@ -333,7 +150,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 3. CHUYÊN KHOA THẾ MẠNH (SPECIALTIES SHOWCASE) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-8 space-y-8">
+      <section id="specialties" className="max-w-7xl mx-auto px-4 sm:px-8 space-y-8 scroll-mt-24">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <Badge status="PRIMARY" variant="subtle" withDot={false}>
             Chuyên môn kỹ thuật cao
@@ -707,6 +524,17 @@ export const HomePage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* NÚT GỌI TỔNG ĐÀI NỔI (FLOATING CALL BUTTON) KIỂU BỆNH VIỆN BẠCH MAI */}
+      <a
+        href={`tel:${(config?.phone || '024 7308 6868').replace(/\s+/g, '')}`}
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 group cursor-pointer border-2 border-white"
+        title={`Gọi tổng đài cấp cứu 24/7: ${config?.phone || '024 7308 6868'}`}
+        aria-label="Gọi tổng đài cấp cứu"
+      >
+        <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-30 pointer-events-none" />
+        <PhoneCall className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+      </a>
     </div>
   );
 };
