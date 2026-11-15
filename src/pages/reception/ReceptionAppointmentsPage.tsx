@@ -523,6 +523,7 @@ export const ReceptionAppointmentsPage: React.FC = () => {
                   const isPending = apt.status === 'PENDING';
                   const isConfirmed = apt.status === 'CONFIRMED';
                   const appointmentDate = new Date(apt.startAt);
+                  const isToday = appointmentDate.toLocaleDateString('vi-VN') === new Date().toLocaleDateString('vi-VN');
 
                   return (
                     <tr
@@ -669,16 +670,25 @@ export const ReceptionAppointmentsPage: React.FC = () => {
 
                           {isConfirmed && (
                             <>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                leftIcon={<UserCheck className="w-3.5 h-3.5" />}
-                                onClick={() => handleCheckin(item)}
-                                disabled={isSubmittingCheckin}
-                                className="text-xs py-1 h-7 bg-sky-600 hover:bg-sky-700 font-bold shadow-2xs"
-                              >
-                                Vào khám
-                              </Button>
+                              {isToday ? (
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  leftIcon={<UserCheck className="w-3.5 h-3.5" />}
+                                  onClick={() => handleCheckin(item)}
+                                  disabled={isSubmittingCheckin}
+                                  className="text-xs py-1 h-7 bg-sky-600 hover:bg-sky-700 font-bold shadow-2xs"
+                                >
+                                  Vào khám
+                                </Button>
+                              ) : (
+                                <span
+                                  className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200"
+                                  title="Chỉ tiếp nhận vào khám đúng ngày hẹn (hôm nay)"
+                                >
+                                  Chờ ngày khám
+                                </span>
+                              )}
                               <Button
                                 variant="outline"
                                 size="sm"

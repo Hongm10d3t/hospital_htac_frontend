@@ -918,7 +918,12 @@ export const DoctorRecordsPage: React.FC = () => {
                     {prescriptions.map((rx) => (
                       <div key={rx.id} className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200 space-y-2 text-xs">
                         <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
-                          <span className="font-mono font-black text-sky-800">{rx.prescriptionCode}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-black text-sky-800">{rx.prescriptionCode}</span>
+                            <span className="font-mono font-bold text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
+                              ID: #{rx.id}
+                            </span>
+                          </div>
                           <span
                             className={cn(
                               'text-[10px] font-bold px-2 py-0.5 rounded-full',
@@ -1099,7 +1104,12 @@ export const DoctorRecordsPage: React.FC = () => {
                         {selectedPastDetail.prescriptions.map((rx) => (
                           <div key={rx.id} className="p-3 rounded-xl bg-white border border-slate-200 space-y-1.5">
                             <div className="flex items-center justify-between font-mono text-[11px] text-slate-500 pb-1 border-b border-slate-100">
-                              <span>Mã: {rx.prescriptionCode}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span>Mã: {rx.prescriptionCode}</span>
+                                <span className="font-bold text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200">
+                                  #{rx.id}
+                                </span>
+                              </div>
                               <span className="font-bold text-emerald-700">{rx.status}</span>
                             </div>
                             {rx.items.map((it) => (

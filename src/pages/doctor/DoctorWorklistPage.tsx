@@ -658,7 +658,12 @@ export const DoctorWorklistPage: React.FC = () => {
                         {selectedPastDetail.prescriptions.map((rx) => (
                           <div key={rx.id} className="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2">
                             <div className="flex items-center justify-between font-mono text-[11px] text-slate-500 pb-1.5 border-b border-slate-100">
-                              <span>Mã đơn: {rx.prescriptionCode}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span>Mã đơn: {rx.prescriptionCode}</span>
+                                <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                  ID: #{rx.id}
+                                </span>
+                              </div>
                               <span className="font-bold text-emerald-700">{rx.status}</span>
                             </div>
                             <div className="space-y-1.5">

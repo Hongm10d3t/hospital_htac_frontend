@@ -643,8 +643,16 @@ export const DoctorMedicinesPage: React.FC = () => {
               >
                 <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                   <div>
-                    <div className="font-mono font-black text-sky-800 text-sm">
-                      {rx.prescriptionCode}
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-black text-sky-800 text-sm">
+                        {rx.prescriptionCode}
+                      </span>
+                      <span
+                        className="font-mono font-bold text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200"
+                        title="ID để Quầy Dược nạp đơn cấp phát"
+                      >
+                        ID: #{rx.id}
+                      </span>
                     </div>
                     <div className="text-[10px] text-slate-400">
                       {rx.issuedAt ? `Phát hành lúc: ${new Date(rx.issuedAt).toLocaleTimeString('vi-VN')} – ${new Date(rx.issuedAt).toLocaleDateString('vi-VN')}` : 'Bản nháp'}
@@ -760,8 +768,9 @@ export const DoctorMedicinesPage: React.FC = () => {
                     {hospitalConfig?.address || 'Hà Nội'} • ĐT: {hospitalConfig?.phone || '1900 8888'}
                   </div>
                 </div>
-                <div className="text-right font-mono text-[10px] text-slate-400">
-                  <div>Mã: {printPrescription.prescriptionCode}</div>
+                <div className="text-right font-mono text-[10px] text-slate-500 space-y-0.5">
+                  <div>Mã: <strong className="text-slate-800">{printPrescription.prescriptionCode}</strong></div>
+                  <div>ID Quầy Dược: <strong className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">#{printPrescription.id}</strong></div>
                 </div>
               </div>
 

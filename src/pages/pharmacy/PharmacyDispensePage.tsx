@@ -13,19 +13,31 @@ import {
   Info,
   Plus,
   Trash2,
+  Boxes,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { useToast } from '../../components/ui/Toast';
+import { cn } from '../../lib/utils';
 import {
   pharmacyDispenseService,
   type DispensingSnapshotResponse,
   type PrescriptionDetailResponse,
   type DispenseReportLine,
 } from '../../services/pharmacyDispenseService';
-import { pharmacyCatalogService, type MedicineBatchItem } from '../../services/pharmacyCatalogService';
+import { pharmacyCatalogService } from '../../services/pharmacyCatalogService';
+import { pharmacyInventoryService } from '../../services/pharmacyInventoryService';
+
+export interface MedicineBatchWithStock {
+  id: number;
+  batchNumber: string;
+  expiryDate: string;
+  status: string;
+  counterStock: number; // Tồn khả dụng tại quầy phát (COUNTER / AVAILABLE)
+  mainStock: number;    // Tồn tại kho chính (MAIN / AVAILABLE)
+}
 
 interface SelectedBatchAllocation {
   batchId: number;
@@ -50,8 +62,8 @@ export const PharmacyDispensePage: React.FC = () => {
 
   // Allocations: Key = prescriptionItemId, Value = array of allocations
   const [allocations, setAllocations] = useState<Record<number, SelectedBatchAllocation[]>>({});
-  // Medicine batches cache: Key = medicineId, Value = list of active batches
-  const [batchCache, setBatchCache] = useState<Record<number, MedicineBatchItem[]>>({});
+  // Medicine batches cache: Key = medicineId, Value = list of active batches with stock info
+  const [batchCache, setBatchCache] = useState<Record<number, MedicineBatchWithStock[]>>({});
 
   // Modals
   const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
@@ -84,9 +96,21 @@ export const PharmacyDispensePage: React.FC = () => {
   // Load prescription data
   const handleLoadPrescription = useCallback(
     async (idToLoad?: number) => {
-      const pid = idToLoad ?? parseInt(searchPrescriptionId, 10);
-      if (isNaN(pid) || pid <= 0) {
-        toast.error('Vui lòng nhập ID đơn thuốc hợp lệ');
+      let pid = idToLoad;
+      if (pid === undefined) {
+        const raw = searchPrescriptionId.trim();
+        if (raw.toUpperCase().startsWith('RX')) {
+          toast.info(
+            'Hệ thống cấp phát tra cứu theo ID Quầy Dược (dạng số). Vui lòng nhập số ID in trên phiếu (ví dụ: ID: #1, #22915).',
+            'Lưu ý định dạng ID'
+          );
+        }
+        const cleaned = raw.replace(/[^0-9]/g, '');
+        pid = parseInt(cleaned, 10);
+      }
+
+      if (!pid || isNaN(pid) || pid <= 0) {
+        toast.error('Vui lòng nhập ID đơn thuốc hợp lệ (VD: 1, #22915 hoặc số ID in trên phiếu)');
         return;
       }
 
@@ -102,31 +126,90 @@ export const PharmacyDispensePage: React.FC = () => {
         setPrescriptionDetail(detailData);
         setDispenseHistory(historyData);
 
-        // Fetch batches for each medicine in snapshot
-        const newCache: Record<number, MedicineBatchItem[]> = {};
+        // Fetch batches and inventory positions for each medicine in snapshot
+        const newCache: Record<number, MedicineBatchWithStock[]> = {};
         const newAllocations: Record<number, SelectedBatchAllocation[]> = {};
 
         for (const item of snapData.items) {
           if (!newCache[item.medicineId]) {
             try {
-              const bRes = await pharmacyCatalogService.getBatches(item.medicineId);
-              newCache[item.medicineId] = bRes.filter((b) => b.status === 'ACTIVE');
+              const [inventoryRes, batchRes] = await Promise.all([
+                pharmacyInventoryService.getMedicineInventory(item.medicineId).catch(() => null),
+                pharmacyCatalogService.getBatches(item.medicineId).catch(() => []),
+              ]);
+
+              // Build map of batchId -> { counterStock, mainStock }
+              const stockMap: Record<number, { counterStock: number; mainStock: number }> = {};
+              if (inventoryRes?.positions) {
+                for (const pos of inventoryRes.positions) {
+                  if (!stockMap[pos.batchId]) {
+                    stockMap[pos.batchId] = { counterStock: 0, mainStock: 0 };
+                  }
+                  if (pos.stockLocation === 'COUNTER' && pos.stockBucket === 'AVAILABLE') {
+                    stockMap[pos.batchId].counterStock += Number(pos.dispensableQuantity || pos.physicalQuantity || 0);
+                  }
+                  if (pos.stockLocation === 'MAIN' && pos.stockBucket === 'AVAILABLE') {
+                    stockMap[pos.batchId].mainStock += Number(pos.dispensableQuantity || pos.physicalQuantity || 0);
+                  }
+                }
+              }
+
+              const activeBatches = (batchRes || []).filter((b) => b.status === 'ACTIVE');
+              const enriched: MedicineBatchWithStock[] = activeBatches.map((b) => ({
+                id: b.id,
+                batchNumber: b.batchNumber,
+                expiryDate: b.expiryDate,
+                status: b.status,
+                counterStock: stockMap[b.id]?.counterStock || 0,
+                mainStock: stockMap[b.id]?.mainStock || 0,
+              }));
+
+              // Sort by FEFO:
+              // 1. Batches that have counterStock > 0 first, sorted by expiryDate ascending
+              // 2. Batches with counterStock === 0, sorted by expiryDate ascending
+              enriched.sort((a, b) => {
+                if (a.counterStock > 0 && b.counterStock === 0) return -1;
+                if (a.counterStock === 0 && b.counterStock > 0) return 1;
+                return a.expiryDate.localeCompare(b.expiryDate);
+              });
+
+              newCache[item.medicineId] = enriched;
             } catch {
               newCache[item.medicineId] = [];
             }
           }
 
-          // Initial allocation suggestion: Pick first active batch with earliest expiry (FEFO)
+          // Initial allocation suggestion: FEFO with actual counter stock
           const availableBatches = newCache[item.medicineId] || [];
-          if (availableBatches.length > 0 && item.remainingQuantity > 0) {
-            const firstBatch = availableBatches[0];
+          const counterBatches = availableBatches.filter((b) => b.counterStock > 0);
+
+          if (counterBatches.length > 0 && item.remainingQuantity > 0) {
+            let remainingToAllocate = item.remainingQuantity;
+            const initialLines: SelectedBatchAllocation[] = [];
+
+            for (const b of counterBatches) {
+              if (remainingToAllocate <= 0) break;
+              const takeQty = Math.min(b.counterStock, remainingToAllocate);
+              initialLines.push({
+                batchId: b.id,
+                batchNumber: b.batchNumber,
+                expiryDate: b.expiryDate,
+                availableStock: b.counterStock,
+                dispenseQuantity: takeQty,
+              });
+              remainingToAllocate -= takeQty;
+            }
+
+            newAllocations[item.prescriptionItemId] = initialLines;
+          } else if (availableBatches.length > 0 && item.remainingQuantity > 0) {
+            // No batch has counter stock > 0, fallback to first batch with 0 stock
             newAllocations[item.prescriptionItemId] = [
               {
-                batchId: firstBatch.id,
-                batchNumber: firstBatch.batchNumber,
-                expiryDate: firstBatch.expiryDate,
-                availableStock: 999, // default indicator
-                dispenseQuantity: item.remainingQuantity,
+                batchId: availableBatches[0].id,
+                batchNumber: availableBatches[0].batchNumber,
+                expiryDate: availableBatches[0].expiryDate,
+                availableStock: availableBatches[0].counterStock,
+                dispenseQuantity: 0,
               },
             ];
           } else {
@@ -180,6 +263,8 @@ export const PharmacyDispensePage: React.FC = () => {
           batchId: selected.id,
           batchNumber: selected.batchNumber,
           expiryDate: selected.expiryDate,
+          availableStock: selected.counterStock,
+          dispenseQuantity: Math.min(currentList[batchIndex].dispenseQuantity, selected.counterStock),
         };
       }
       return { ...prev, [itemId]: currentList };
@@ -192,23 +277,26 @@ export const PharmacyDispensePage: React.FC = () => {
       toast.warning('Thuốc này chưa có lô hoạt động');
       return;
     }
-    const defaultBatch = medicineBatches[0];
-    setAllocations((prev) => {
-      const currentList = prev[itemId] ? [...prev[itemId]] : [];
-      return {
-        ...prev,
-        [itemId]: [
-          ...currentList,
-          {
-            batchId: defaultBatch.id,
-            batchNumber: defaultBatch.batchNumber,
-            expiryDate: defaultBatch.expiryDate,
-            availableStock: 999,
-            dispenseQuantity: 0,
-          },
-        ],
-      };
-    });
+    const currentList = allocations[itemId] ? [...allocations[itemId]] : [];
+    const usedBatchIds = new Set(currentList.map((a) => a.batchId));
+    const nextBatch =
+      medicineBatches.find((b) => !usedBatchIds.has(b.id) && b.counterStock > 0) ||
+      medicineBatches.find((b) => !usedBatchIds.has(b.id)) ||
+      medicineBatches[0];
+
+    setAllocations((prev) => ({
+      ...prev,
+      [itemId]: [
+        ...currentList,
+        {
+          batchId: nextBatch.id,
+          batchNumber: nextBatch.batchNumber,
+          expiryDate: nextBatch.expiryDate,
+          availableStock: nextBatch.counterStock,
+          dispenseQuantity: 0,
+        },
+      ],
+    }));
   };
 
   const handleRemoveBatchLine = (itemId: number, batchIndex: number) => {
@@ -223,13 +311,20 @@ export const PharmacyDispensePage: React.FC = () => {
   const handlePerformDispense = async () => {
     if (!snapshot) return;
 
-    // Collect dispense items
+    // Collect dispense items and pre-validate counter stock
     const itemsToDispense: Array<{ prescriptionItemId: number; batchId: number; quantity: number }> = [];
 
     for (const [itemIdStr, allocList] of Object.entries(allocations)) {
       const itemId = parseInt(itemIdStr, 10);
+      const itemInfo = snapshot.items.find((i) => i.prescriptionItemId === itemId);
       for (const a of allocList) {
         if (a.dispenseQuantity > 0) {
+          if (a.dispenseQuantity > a.availableStock) {
+            toast.error(
+              `Lô #${a.batchNumber} của thuốc "${itemInfo?.medicineName || ''}" chỉ còn ${a.availableStock} tại quầy. Không thể phát ${a.dispenseQuantity}!`
+            );
+            return;
+          }
           itemsToDispense.push({
             prescriptionItemId: itemId,
             batchId: a.batchId,
@@ -393,13 +488,12 @@ export const PharmacyDispensePage: React.FC = () => {
           </div>
 
           {/* Form tra cứu đơn thuốc */}
-          <div className="flex items-center gap-2">
-            <div className="relative w-64">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="relative w-72">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <Input
-                type="number"
-                min="1"
-                placeholder="Nhập ID đơn thuốc (VD: 1, 2)..."
+                type="text"
+                placeholder="Nhập ID đơn thuốc (VD: 1, #22915)..."
                 value={searchPrescriptionId}
                 onChange={(e) => setSearchPrescriptionId(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLoadPrescription()}
@@ -409,7 +503,7 @@ export const PharmacyDispensePage: React.FC = () => {
             <Button
               onClick={() => handleLoadPrescription()}
               isLoading={loading}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm shrink-0"
             >
               Nạp đơn
             </Button>
@@ -417,7 +511,7 @@ export const PharmacyDispensePage: React.FC = () => {
               variant="outline"
               onClick={() => handleLoadPrescription(snapshot?.prescriptionId)}
               title="Làm mới dữ liệu"
-              className="px-3"
+              className="px-3 shrink-0"
             >
               <RefreshCw className="w-4 h-4 text-slate-600" />
             </Button>
@@ -540,6 +634,8 @@ export const PharmacyDispensePage: React.FC = () => {
                 const availableBatches = batchCache[item.medicineId] || [];
                 const totalAllocated = itemAllocations.reduce((sum, a) => sum + (Number(a.dispenseQuantity) || 0), 0);
                 const isFullySatisfied = item.remainingQuantity === 0;
+                const totalCounterStock = availableBatches.reduce((sum, b) => sum + (Number(b.counterStock) || 0), 0);
+                const totalMainStock = availableBatches.reduce((sum, b) => sum + (Number(b.mainStock) || 0), 0);
 
                 return (
                   <div key={item.prescriptionItemId} className="p-5 hover:bg-slate-50/50 transition">
@@ -550,7 +646,7 @@ export const PharmacyDispensePage: React.FC = () => {
                           <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
                             {idx + 1}
                           </span>
-                          <div>
+                          <div className="flex-1">
                             <h3 className="font-bold text-slate-900 text-base">
                               {item.medicineName}
                             </h3>
@@ -593,6 +689,70 @@ export const PharmacyDispensePage: React.FC = () => {
                                 </div>
                               )}
                             </div>
+
+                            {/* Thẻ hiển thị số lượng tồn tại quầy theo từng lô */}
+                            <div className="mt-3 bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 text-xs space-y-2">
+                              <div className="flex items-center justify-between font-semibold text-emerald-900 border-b border-emerald-200 pb-1.5">
+                                <span className="flex items-center gap-1.5 text-xs">
+                                  <Boxes className="w-4 h-4 text-emerald-700" />
+                                  Tồn Quầy phát (COUNTER):
+                                </span>
+                                <span
+                                  className={cn(
+                                    'font-bold text-sm',
+                                    totalCounterStock >= item.remainingQuantity
+                                      ? 'text-emerald-700'
+                                      : totalCounterStock > 0
+                                      ? 'text-amber-700'
+                                      : 'text-rose-700'
+                                  )}
+                                >
+                                  {totalCounterStock.toLocaleString('vi-VN')} {item.baseUnit}
+                                </span>
+                              </div>
+
+                              {availableBatches.length === 0 ? (
+                                <div className="text-rose-600 italic text-[11px] py-1">
+                                  Chưa ghi nhận lô hoạt động nào.
+                                </div>
+                              ) : (
+                                <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+                                  {availableBatches.map((b) => (
+                                    <div
+                                      key={b.id}
+                                      className="flex justify-between items-center text-[11px] bg-white/90 p-1.5 rounded-lg border border-emerald-100"
+                                    >
+                                      <div>
+                                        <span className="font-mono font-bold text-slate-800">#{b.batchNumber}</span>
+                                        <span className="text-slate-400 font-sans ml-1.5">(HSD: {b.expiryDate})</span>
+                                      </div>
+                                      <span
+                                        className={cn(
+                                          'font-mono font-bold px-1.5 py-0.5 rounded text-[11px]',
+                                          b.counterStock > 0
+                                            ? 'bg-emerald-100 text-emerald-800'
+                                            : 'bg-slate-100 text-slate-400'
+                                        )}
+                                      >
+                                        {b.counterStock > 0
+                                          ? `${b.counterStock.toLocaleString('vi-VN')} ${item.baseUnit}`
+                                          : `0 ${item.baseUnit}`}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Gợi ý điều chuyển nếu tồn quầy không đủ */}
+                              {totalCounterStock < item.remainingQuantity && totalMainStock > 0 && (
+                                <div className="text-[11px] text-blue-700 bg-blue-50/80 p-2 rounded-lg border border-blue-200 flex items-start gap-1.5">
+                                  <Info className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                                  <div>
+                                    Kho chính (MAIN) hiện còn <strong>{totalMainStock.toLocaleString('vi-VN')} {item.baseUnit}</strong>. Có thể điều chuyển thêm ra quầy.
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -620,85 +780,124 @@ export const PharmacyDispensePage: React.FC = () => {
                             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                             <span>Mặt hàng này đã được cấp phát đầy đủ ({item.dispensedQuantity} {item.baseUnit}). Không cần phát thêm.</span>
                           </div>
-                        ) : availableBatches.length === 0 ? (
-                          <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-center gap-2">
-                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                            <span>Quầy thuốc hiện không có Lô hoạt động nào cho thuốc này. Vui lòng kiểm tra chuyển kho hoặc ghi nhận lý do chưa nhận.</span>
+                        ) : availableBatches.length === 0 || totalCounterStock === 0 ? (
+                          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1.5">
+                            <div className="flex items-center gap-2 font-semibold">
+                              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                              <span>Quầy thuốc hiện không có tồn khả dụng cho thuốc này (Tồn quầy: 0 {item.baseUnit}).</span>
+                            </div>
+                            {totalMainStock > 0 ? (
+                              <p className="text-[11px] text-slate-700">
+                                💡 Kho chính (MAIN) hiện đang có <strong>{totalMainStock.toLocaleString('vi-VN')} {item.baseUnit}</strong>. Bạn hãy tạo phiếu <strong>Điều chuyển kho</strong> để bổ sung ra quầy trước khi cấp phát.
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-slate-700">
+                                Bệnh viện hiện đã hết mặt hàng này. Vui lòng bấm <strong>"Rà soát chưa nhận"</strong> để ghi nhận lý do thiếu thuốc (STOCKOUT).
+                              </p>
+                            )}
                           </div>
                         ) : (
                           <div className="space-y-2.5">
-                            {itemAllocations.map((alloc, aIdx) => (
-                              <div
-                                key={aIdx}
-                                className="flex flex-col sm:flex-row sm:items-center gap-2 bg-white p-2.5 rounded-lg border border-slate-200 text-xs"
-                              >
-                                {/* Chọn Lô */}
-                                <div className="flex-1">
-                                  <label className="text-[11px] text-slate-500 mb-1 block">
-                                    Lô thuốc &amp; Hạn dùng (FEFO)
-                                  </label>
-                                  <select
-                                    value={alloc.batchId}
-                                    onChange={(e) =>
-                                      handleSelectBatch(
-                                        item.prescriptionItemId,
-                                        aIdx,
-                                        item.medicineId,
-                                        parseInt(e.target.value, 10)
-                                      )
-                                    }
-                                    className="w-full text-xs py-1.5 px-2 bg-slate-50 border border-slate-300 rounded focus:ring-1 focus:ring-emerald-500"
-                                  >
-                                    {availableBatches.map((b) => (
-                                      <option key={b.id} value={b.id}>
-                                        Số lô: {b.batchNumber} (HSD: {b.expiryDate})
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
+                            {itemAllocations.map((alloc, aIdx) => {
+                              const currentBatch = availableBatches.find((b) => b.id === alloc.batchId);
+                              const stockOnHand = currentBatch?.counterStock ?? alloc.availableStock ?? 0;
+                              const isOverStock = alloc.dispenseQuantity > stockOnHand;
 
-                                {/* Nhập số lượng phát */}
-                                <div className="w-32">
-                                  <label className="text-[11px] text-slate-500 mb-1 block">
-                                    SL phát ({item.baseUnit})
-                                  </label>
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    max={item.remainingQuantity}
-                                    step="1"
-                                    value={alloc.dispenseQuantity}
-                                    onChange={(e) =>
-                                      handleUpdateBatchQuantity(
-                                        item.prescriptionItemId,
-                                        aIdx,
-                                        parseFloat(e.target.value) || 0
-                                      )
-                                    }
-                                    className="py-1 px-2 text-xs font-bold text-emerald-700"
-                                  />
-                                </div>
+                              return (
+                                <div
+                                  key={aIdx}
+                                  className={cn(
+                                    'flex flex-col sm:flex-row sm:items-start gap-2.5 bg-white p-3 rounded-xl border text-xs transition',
+                                    isOverStock ? 'border-rose-300 ring-1 ring-rose-200 bg-rose-50/20' : 'border-slate-200'
+                                  )}
+                                >
+                                  {/* Chọn Lô */}
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className="text-[11px] font-semibold text-slate-600">
+                                        Lô thuốc xuất quầy (FEFO)
+                                      </label>
+                                      <span className="text-[11px] text-slate-500">
+                                        Tồn quầy của lô:{' '}
+                                        <strong className={stockOnHand > 0 ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
+                                          {stockOnHand.toLocaleString('vi-VN')} {item.baseUnit}
+                                        </strong>
+                                      </span>
+                                    </div>
+                                    <select
+                                      value={alloc.batchId}
+                                      onChange={(e) =>
+                                        handleSelectBatch(
+                                          item.prescriptionItemId,
+                                          aIdx,
+                                          item.medicineId,
+                                          parseInt(e.target.value, 10)
+                                        )
+                                      }
+                                      className="w-full text-xs py-1.5 px-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-1 focus:ring-emerald-500 font-medium"
+                                    >
+                                      {availableBatches.map((b) => (
+                                        <option key={b.id} value={b.id}>
+                                          Số lô: {b.batchNumber} (HSD: {b.expiryDate}) — Tồn quầy: {b.counterStock.toLocaleString('vi-VN')} {item.baseUnit} {b.counterStock === 0 ? '(Hết tại quầy)' : ''}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {isOverStock && (
+                                      <p className="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-1">
+                                        <AlertTriangle className="w-3.5 h-3.5" />
+                                        Số lượng phát vượt quá số tồn thực tế tại quầy ({stockOnHand} {item.baseUnit})!
+                                      </p>
+                                    )}
+                                  </div>
 
-                                {/* Nút xóa dòng nếu có nhiều lô */}
-                                {itemAllocations.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveBatchLine(item.prescriptionItemId, aIdx)}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded self-end sm:self-center"
-                                    title="Xóa phân bổ lô này"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            ))}
+                                  {/* Nhập số lượng phát */}
+                                  <div className="w-36">
+                                    <label className="text-[11px] font-semibold text-slate-600 mb-1 block">
+                                      SL phát ({item.baseUnit})
+                                    </label>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max={stockOnHand}
+                                      step="1"
+                                      value={alloc.dispenseQuantity}
+                                      onChange={(e) =>
+                                        handleUpdateBatchQuantity(
+                                          item.prescriptionItemId,
+                                          aIdx,
+                                          parseFloat(e.target.value) || 0
+                                        )
+                                      }
+                                      className={cn(
+                                        'py-1.5 px-2.5 text-xs font-bold',
+                                        isOverStock
+                                          ? 'text-rose-700 border-rose-400 bg-rose-50'
+                                          : 'text-emerald-700'
+                                      )}
+                                    />
+                                  </div>
+
+                                  {/* Nút xóa dòng nếu có nhiều lô */}
+                                  {itemAllocations.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveBatchLine(item.prescriptionItemId, aIdx)}
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded self-end sm:self-center mt-4 sm:mt-5"
+                                      title="Xóa phân bổ lô này"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
 
                             {/* Cảnh báo số lượng phân bổ so với cần phát */}
                             <div className="flex items-center justify-between text-xs pt-1 px-1">
                               <span className="text-slate-500">
                                 Tổng chuẩn bị phát đợt này:{' '}
                                 <strong className="text-emerald-700">
-                                  {totalAllocated} {item.baseUnit}
+                                  {totalAllocated.toLocaleString('vi-VN')} {item.baseUnit}
                                 </strong>
                               </span>
                               {totalAllocated > item.remainingQuantity && (

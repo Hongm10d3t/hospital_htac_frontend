@@ -57,7 +57,7 @@ import {
   toVietnamOffsetIso,
   toStartOfDayIso,
 } from '../../lib/dateUtils';
-import { cn } from '../../lib/utils';
+import { cn, resolveAvatarSrc } from '../../lib/utils';
 
 export const ClinicSlotsPage: React.FC = () => {
   const { toast } = useToast();
@@ -185,13 +185,15 @@ export const ClinicSlotsPage: React.FC = () => {
       const params: {
         from: string;
         to: string;
+        page: number;
         size: number;
         roomId?: number;
         doctorId?: number;
       } = {
         from: fromStr,
         to: toStr,
-        size: 500, // Đủ lớn để lấy trọn vẹn tuần
+        page: 0,
+        size: 100, // Backend PageQuery giới hạn tối đa 100 bản ghi/trang
       };
 
       if (filterRoomId !== 'ALL') {
@@ -201,13 +203,31 @@ export const ClinicSlotsPage: React.FC = () => {
         params.doctorId = Number(filterDoctorId);
       }
 
-      const res = await clinicSlotService.listSlots(params);
-      setSlots(res.items || []);
-    } catch {
+      const firstPage = await clinicSlotService.listSlots(params);
+      let allSlots = firstPage.items || [];
+
+      // Nếu số lượng khung giờ của tuần vượt quá 100, tiếp tục tải các trang còn lại
+      if (firstPage.totalPages > 1) {
+        const extraPromises = [];
+        for (let p = 1; p < firstPage.totalPages; p++) {
+          extraPromises.push(clinicSlotService.listSlots({ ...params, page: p }));
+        }
+        const extraResults = await Promise.all(extraPromises);
+        extraResults.forEach((res) => {
+          if (res.items) {
+            allSlots = allSlots.concat(res.items);
+          }
+        });
+      }
+
+      setSlots(allSlots);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Không thể tải danh sách khung khám của tuần được chọn.';
       toast({
         type: 'error',
         title: 'Lỗi tải lịch khám',
-        message: 'Không thể tải danh sách khung khám của tuần được chọn.',
+        message: msg,
       });
     } finally {
       setIsLoadingSlots(false);
@@ -1171,6 +1191,7 @@ export const ClinicSlotsPage: React.FC = () => {
               const doc = doctorsMap.get(selectedSlot.doctorId);
               const prof = profiles.get(selectedSlot.doctorId);
               const spec = prof ? specialtiesMap.get(prof.specialtyId) : null;
+              const avatarSrc = resolveAvatarSrc(prof?.avatarUrl);
 
               return (
                 <div className="space-y-3">
@@ -1179,24 +1200,27 @@ export const ClinicSlotsPage: React.FC = () => {
                     Bác sĩ phụ trách
                   </h3>
                   <div className="p-4 bg-white rounded-xl border border-slate-200 flex items-start gap-4">
-                    {prof?.avatarUrl ? (
+                    {avatarSrc ? (
                       <div className="relative group cursor-pointer shrink-0">
                         <img
-                          src={prof.avatarUrl}
+                          src={avatarSrc}
                           alt={doc?.fullName || 'Bác sĩ'}
                           className="w-16 h-16 rounded-xl object-cover border border-slate-200 shadow-xs"
                           onClick={() =>
                             setZoomedAvatar({
-                              url: prof.avatarUrl!,
+                              url: avatarSrc,
                               name: doc?.fullName || 'Bác sĩ',
                             })
                           }
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          }}
                         />
                         <div
                           className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={() =>
                             setZoomedAvatar({
-                              url: prof.avatarUrl!,
+                              url: avatarSrc,
                               name: doc?.fullName || 'Bác sĩ',
                             })
                           }
@@ -1765,7 +1789,7 @@ export const ClinicSlotsPage: React.FC = () => {
             </div>
             <div className="p-4 flex items-center justify-center bg-slate-50">
               <img
-                src={zoomedAvatar.url}
+                src={resolveAvatarSrc(zoomedAvatar.url) || zoomedAvatar.url}
                 alt={zoomedAvatar.name}
                 className="max-h-[60vh] max-w-full rounded-xl object-contain shadow-md"
               />

@@ -18,12 +18,36 @@ import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { useToast } from '../../components/ui/Toast';
+import { cn } from '../../lib/utils';
 import {
   pharmacyInventoryService,
   type MedicineInventoryResponse,
   type StockMovementResponse,
 } from '../../services/pharmacyInventoryService';
 import { Link } from 'react-router-dom';
+
+const renderTypeBadge = (type: string) => {
+  switch (type) {
+    case 'RECEIPT':
+      return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300">Nhập kho (RECEIPT)</Badge>;
+    case 'TRANSFER':
+      return <Badge className="bg-blue-100 text-blue-800 border-blue-300">Điều chuyển (TRANSFER)</Badge>;
+    case 'DISPENSE':
+      return <Badge className="bg-teal-100 text-teal-800 border-teal-300">Cấp phát (DISPENSE)</Badge>;
+    case 'ADJUSTMENT':
+      return <Badge className="bg-purple-100 text-purple-800 border-purple-300">Kiểm kê (ADJUSTMENT)</Badge>;
+    case 'DISPOSAL':
+      return <Badge className="bg-rose-100 text-rose-800 border-rose-300">Xuất hủy (DISPOSAL)</Badge>;
+    case 'SUPPLIER_RETURN':
+      return <Badge className="bg-orange-100 text-orange-800 border-orange-300">Trả NCC (SUPPLIER_RETURN)</Badge>;
+    case 'PATIENT_RETURN':
+      return <Badge className="bg-amber-100 text-amber-800 border-amber-300">BN trả thuốc</Badge>;
+    case 'OPENING':
+      return <Badge className="bg-slate-100 text-slate-800 border-slate-300">Tồn đầu kỳ</Badge>;
+    default:
+      return <Badge variant="outline">{type}</Badge>;
+  }
+};
 
 export const PharmacyInventoryPage: React.FC = () => {
   const toast = useToast();
@@ -51,7 +75,7 @@ export const PharmacyInventoryPage: React.FC = () => {
     try {
       const res = await pharmacyInventoryService.searchInventory({
         term: searchTerm || undefined,
-        size: 200,
+        size: 100, // Backend PageQuery giới hạn tối đa 100
         sort: 'code,ASC',
       });
       setInventoryList(res.items || []);
@@ -406,6 +430,7 @@ export const PharmacyInventoryPage: React.FC = () => {
       <Modal
         isOpen={isPositionModalOpen}
         onClose={() => setIsPositionModalOpen(false)}
+        size="xl"
         title={`Vị Trí Tồn Kho & Lô Thuốc: ${selectedMedicine?.name} (${selectedMedicine?.code})`}
       >
         {selectedMedicine && (
@@ -453,59 +478,74 @@ export const PharmacyInventoryPage: React.FC = () => {
             )}
 
             {/* Bảng vị trí tồn chi tiết (Kho & Lô) */}
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="border border-slate-200 rounded-lg overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200">
                   <tr>
-                    <th className="py-2.5 px-3">Lô Thuốc</th>
-                    <th className="py-2.5 px-3">Hạn Dùng</th>
-                    <th className="py-2.5 px-3">Vị Trí Kho &amp; Nhóm</th>
-                    <th className="py-2.5 px-3">Trạng Thái Lô</th>
-                    <th className="py-2.5 px-3 text-right">Tồn Vật Lý</th>
-                    <th className="py-2.5 px-3 text-right">Tồn Khả Dụng</th>
-                    <th className="py-2.5 px-3 text-center">Thao Tác</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Lô Thuốc</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Hạn Dùng</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Vị Trí Kho &amp; Nhóm</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap text-center">Trạng Thái</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap text-right">Tồn Vật Lý</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap text-right">Tồn Khả Dụng</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap text-center">Thao Tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {selectedMedicine.positions && selectedMedicine.positions.length > 0 ? (
                     selectedMedicine.positions.map((pos, pIdx) => (
-                      <tr key={pIdx} className="hover:bg-slate-50">
-                        <td className="py-2.5 px-3 font-medium text-slate-900">
-                          #{pos.batchNumber}
+                      <tr key={pIdx} className="hover:bg-slate-50 transition">
+                        <td className="py-2.5 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            #{pos.batchNumber}
+                          </span>
                         </td>
-                        <td className="py-2.5 px-3 text-slate-600">
+                        <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
                           {pos.expiryDate}
                         </td>
-                        <td className="py-2.5 px-3">
-                          <span className="font-semibold text-slate-800">{pos.stockLocation}</span>
-                          <span className="text-slate-400"> / </span>
-                          <span className="text-slate-500">{pos.stockBucket}</span>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="font-semibold text-slate-800">
+                            {pos.stockLocation === 'COUNTER' ? 'Quầy phát (COUNTER)' : pos.stockLocation === 'MAIN' ? 'Kho chính (MAIN)' : pos.stockLocation}
+                          </span>
+                          <span className="text-slate-400"> • </span>
+                          <span
+                            className={cn(
+                              'text-[11px] font-medium px-1.5 py-0.5 rounded border',
+                              pos.stockBucket === 'AVAILABLE'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            )}
+                          >
+                            {pos.stockBucket === 'AVAILABLE' ? 'Khả dụng' : 'Cách ly'}
+                          </span>
                         </td>
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           {pos.batchStatus === 'ACTIVE' ? (
-                            <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">
-                              ACTIVE
+                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">
+                              Hoạt động
                             </Badge>
                           ) : (
-                            <Badge className="bg-rose-100 text-rose-800 text-[10px]">
-                              BLOCKED
+                            <Badge className="bg-rose-100 text-rose-800 border-rose-300 text-[10px]">
+                              Bị khóa
                             </Badge>
                           )}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-medium text-slate-700">
-                          {pos.physicalQuantity}
+                        <td className="py-2.5 px-3 text-right font-medium text-slate-700 whitespace-nowrap">
+                          {pos.physicalQuantity.toLocaleString('vi-VN')}{' '}
+                          <span className="text-[11px] text-slate-400 font-normal">{selectedMedicine.baseUnit}</span>
                         </td>
-                        <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
-                          {pos.dispensableQuantity}
+                        <td className="py-2.5 px-3 text-right font-bold text-emerald-700 text-sm whitespace-nowrap">
+                          {pos.dispensableQuantity.toLocaleString('vi-VN')}{' '}
+                          <span className="text-[11px] text-emerald-500 font-normal">{selectedMedicine.baseUnit}</span>
                         </td>
-                        <td className="py-2.5 px-3 text-center">
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => handleOpenMovements(pos.batchId, pos.batchNumber)}
-                            className="py-1 px-2 text-[11px] text-blue-700 hover:bg-blue-50 border-blue-200"
+                            className="py-1 px-2.5 text-xs text-blue-700 hover:bg-blue-50 hover:text-blue-800 border-blue-200 shadow-xs"
                           >
-                            <History className="w-3 h-3 mr-1" /> Thẻ kho
+                            <History className="w-3.5 h-3.5 mr-1 text-blue-600" /> Thẻ kho
                           </Button>
                         </td>
                       </tr>
@@ -534,6 +574,7 @@ export const PharmacyInventoryPage: React.FC = () => {
       <Modal
         isOpen={isMovementModalOpen}
         onClose={() => setIsMovementModalOpen(false)}
+        size="xl"
         title={`Thẻ Kho Lô Thuốc: #${selectedBatchNumber} (ID: ${selectedBatchId})`}
       >
         <div className="space-y-4">
@@ -551,35 +592,50 @@ export const PharmacyInventoryPage: React.FC = () => {
               Chưa ghi nhận biến động nào cho lô thuốc này.
             </div>
           ) : (
-            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+            <div className="border border-slate-200 rounded-lg overflow-x-auto max-h-80 overflow-y-auto">
               <table className="w-full text-xs text-left">
                 <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200 sticky top-0">
                   <tr>
-                    <th className="py-2 px-3">Thời gian</th>
-                    <th className="py-2 px-3">Mã phiếu</th>
-                    <th className="py-2 px-3">Loại nghiệp vụ</th>
-                    <th className="py-2 px-3">Vị trí kho</th>
-                    <th className="py-2 px-3 text-right">Biến động</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Thời gian</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Mã chứng từ</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Loại nghiệp vụ</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Vị trí kho &amp; Nhóm</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap text-right">Biến động (SL)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {movements.map((mv, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      <td className="py-2 px-3 text-slate-600 whitespace-nowrap">
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
                         {new Date(mv.occurredAt).toLocaleString('vi-VN')}
                       </td>
-                      <td className="py-2 px-3 font-mono text-slate-800">
-                        #{mv.documentCode || mv.documentId}
+                      <td className="py-2.5 px-3 font-mono font-medium text-slate-800 whitespace-nowrap">
+                        <span className="bg-slate-100 px-2 py-0.5 rounded text-xs border border-slate-200">
+                          #{mv.documentCode || mv.documentId}
+                        </span>
                       </td>
-                      <td className="py-2 px-3 font-semibold text-slate-700">
-                        {mv.type}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        {renderTypeBadge(mv.type)}
                       </td>
-                      <td className="py-2 px-3 text-slate-600">
-                        {mv.stockLocation} / {mv.stockBucket}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <span className="font-semibold text-slate-700">
+                          {mv.stockLocation === 'COUNTER' ? 'Quầy phát' : mv.stockLocation === 'MAIN' ? 'Kho chính' : mv.stockLocation}
+                        </span>
+                        <span className="text-slate-400"> / </span>
+                        <span className="text-slate-500">
+                          {mv.stockBucket === 'AVAILABLE' ? 'Khả dụng' : mv.stockBucket === 'QUARANTINE' ? 'Cách ly' : mv.stockBucket}
+                        </span>
                       </td>
-                      <td className="py-2 px-3 text-right font-bold text-sm">
-                        <span className={mv.deltaQuantity >= 0 ? 'text-emerald-700' : 'text-rose-700'}>
-                          {mv.deltaQuantity >= 0 ? `+${mv.deltaQuantity}` : mv.deltaQuantity}
+                      <td className="py-2.5 px-3 text-right whitespace-nowrap font-mono font-bold text-sm">
+                        <span
+                          className={cn(
+                            'px-2 py-0.5 rounded text-xs font-bold inline-block',
+                            mv.deltaQuantity >= 0
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          )}
+                        >
+                          {mv.deltaQuantity >= 0 ? `+${mv.deltaQuantity.toLocaleString('vi-VN')}` : mv.deltaQuantity.toLocaleString('vi-VN')}
                         </span>
                       </td>
                     </tr>

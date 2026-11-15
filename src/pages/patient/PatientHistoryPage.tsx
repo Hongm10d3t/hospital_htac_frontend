@@ -648,8 +648,16 @@ export const PatientHistoryPage: React.FC = () => {
                               <Pill className="w-5 h-5" />
                             </div>
                             <div>
-                              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                                Đơn Thuốc Điện Tử
+                              <div className="flex items-center gap-2">
+                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                  Đơn Thuốc Điện Tử
+                                </span>
+                                <span
+                                  className="font-mono font-bold text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200"
+                                  title="ID để Quầy Dược nạp đơn"
+                                >
+                                  ID: #{p.id}
+                                </span>
                               </div>
                               <div className="font-mono font-black text-indigo-900 text-base">
                                 {p.prescriptionCode}
@@ -927,9 +935,17 @@ export const PatientHistoryPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <span className="font-mono font-bold text-xs bg-indigo-50 text-indigo-800 px-3 py-1 rounded-full border border-indigo-200">
-                    Mã đơn: {selectedPrescriptionDetail.prescription.prescriptionCode}
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <span className="font-mono font-bold text-xs bg-indigo-50 text-indigo-800 px-3 py-1 rounded-full border border-indigo-200">
+                      Mã đơn: {selectedPrescriptionDetail.prescription.prescriptionCode}
+                    </span>
+                    <span
+                      className="font-mono font-black text-xs bg-emerald-50 text-emerald-800 px-3 py-1 rounded-full border border-emerald-200 shadow-2xs"
+                      title="Dùng số ID này để Quầy Dược nạp đơn cấp phát thuốc"
+                    >
+                      ID Quầy Dược: #{selectedPrescriptionDetail.prescription.id}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Tiêu đề đơn thuốc */}

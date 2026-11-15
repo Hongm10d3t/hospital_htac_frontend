@@ -92,7 +92,7 @@ export const pharmacyCatalogService = {
   getSuppliers: async (params?: CatalogFilterParams): Promise<PageResponse<SupplierDto>> =>
     pharmacyCatalogService.listSuppliers(params),
   getBatches: async (medicineId?: number): Promise<MedicineBatchDto[]> => {
-    const res = await pharmacyCatalogService.listBatches({ medicineId, size: 200 });
+    const res = await pharmacyCatalogService.listBatches({ medicineId, size: 100 });
     return res.items || [];
   },
 

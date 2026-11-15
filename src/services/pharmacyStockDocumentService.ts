@@ -106,11 +106,13 @@ export interface StockMovementReportLine {
   documentCode: string;
   itemId: number;
   batchId: number;
+  medicineId?: number;
   type: string;
   occurredAt: string;
   stockLocation: string;
   stockBucket: string;
-  quantity: number;
+  deltaQuantity?: number;
+  quantity?: number;
 }
 
 export interface StockMovementReportPage {

@@ -79,7 +79,7 @@ export const PharmacyPurchaseRequestsPage: React.FC = () => {
   const loadCatalogs = useCallback(async () => {
     try {
       const [meds, supps] = await Promise.all([
-        pharmacyCatalogService.getMedicines({ size: 200 }),
+        pharmacyCatalogService.getMedicines({ size: 100 }),
         pharmacyCatalogService.getSuppliers({ size: 100 }),
       ]);
       setMedicines(meds.items || []);

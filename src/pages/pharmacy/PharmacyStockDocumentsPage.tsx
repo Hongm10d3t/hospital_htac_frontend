@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   FileText,
   Plus,
@@ -14,12 +14,16 @@ import {
   Trash2,
   Check,
   Eye,
+  Calendar,
+  Package,
+  Search,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { useToast } from '../../components/ui/Toast';
+import { cn } from '../../lib/utils';
 import {
   pharmacyStockDocumentService,
   type StockDocumentResponse,
@@ -32,6 +36,23 @@ import {
   type MedicineBatchItem,
 } from '../../services/pharmacyCatalogService';
 
+const formatLocalDate = (d: Date): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDefaultDates = () => {
+  const now = new Date();
+  const past = new Date();
+  past.setDate(past.getDate() - 90); // 90 ngày gần nhất
+  return {
+    from: formatLocalDate(past),
+    to: formatLocalDate(now),
+  };
+};
+
 export const PharmacyStockDocumentsPage: React.FC = () => {
   const toast = useToast();
 
@@ -41,6 +62,12 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('');
   const [filterLocation, setFilterLocation] = useState<string>('');
   const [searchDocId, setSearchDocId] = useState<string>('');
+  const [searchBatchOrMed, setSearchBatchOrMed] = useState<string>('');
+
+  // Date range states (Backend ReportWindow requires from, to and to.isAfter(from))
+  const defaultDates = useMemo(() => getDefaultDates(), []);
+  const [fromDate, setFromDate] = useState<string>(defaultDates.from);
+  const [toDate, setToDate] = useState<string>(defaultDates.to);
 
   // Catalogs cache
   const [medicines, setMedicines] = useState<MedicineItem[]>([]);
@@ -93,33 +120,60 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
   const [exitType, setExitType] = useState<'DISPOSAL' | 'SUPPLIER_RETURN'>('DISPOSAL');
   const [exitLocation, setExitLocation] = useState<string>('MAIN');
   const exitBucket = 'QUARANTINE';
-  const [exitSupplierId] = useState<string>('');
+  const [exitSupplierId, setExitSupplierId] = useState<string>('');
   const [exitReason, setExitReason] = useState<string>('Thuốc hỏng bao bì/hết hạn theo quy định');
   const [exitItems, setExitItems] = useState<
     Array<{ medicineId: number; batchId: number; quantity: number; note: string }>
   >([]);
 
-  // Initial load
+  // Initial load: catalog data capped at size 100 (PageQuery max is 100)
   const loadInitialData = useCallback(async () => {
     try {
-      const [medsRes, suppsRes] = await Promise.all([
-        pharmacyCatalogService.getMedicines({ size: 200 }),
+      const [medsRes, suppsRes] = await Promise.allSettled([
+        pharmacyCatalogService.getMedicines({ size: 100 }),
         pharmacyCatalogService.getSuppliers({ size: 100 }),
       ]);
-      setMedicines(medsRes.items || []);
-      setSuppliers(suppsRes.items || []);
+      if (medsRes.status === 'fulfilled') {
+        setMedicines(medsRes.value.items || []);
+      }
+      if (suppsRes.status === 'fulfilled') {
+        setSuppliers(suppsRes.value.items || []);
+      }
     } catch {
       // Ignore initial catalog load error
     }
   }, []);
 
-  const loadMovements = useCallback(async () => {
+  const loadMovements = useCallback(async (customFrom?: string, customTo?: string) => {
     setLoading(true);
     try {
+      const fDate = customFrom ?? fromDate;
+      const tDate = customTo ?? toDate;
+
+      if (!fDate || !tDate) {
+        toast.warning('Vui lòng chọn khoảng ngày');
+        setLoading(false);
+        return;
+      }
+
+      // ReportWindow trong backend quy định to.isAfter(from) và lọc occurred_at < to.atStartOfDay
+      // Do đó cộng thêm 1 ngày vào toDate để bao trọn giao dịch của ngày kết thúc
+      const toDateObj = new Date(tDate);
+      toDateObj.setDate(toDateObj.getDate() + 1);
+      const effectiveTo = formatLocalDate(toDateObj);
+
+      if (effectiveTo <= fDate) {
+        toast.warning('Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu');
+        setLoading(false);
+        return;
+      }
+
       const res = await pharmacyStockDocumentService.searchMovementLines({
+        from: fDate,
+        to: effectiveTo,
         type: filterType || undefined,
         location: filterLocation || undefined,
-        size: 50,
+        size: 100,
       });
       setMovements(res.items || []);
     } catch (err: unknown) {
@@ -128,12 +182,73 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterType, filterLocation, toast]);
+  }, [fromDate, toDate, filterType, filterLocation, toast]);
 
   useEffect(() => {
     loadInitialData();
+  }, [loadInitialData]);
+
+  useEffect(() => {
     loadMovements();
-  }, [loadInitialData, loadMovements]);
+  }, [loadMovements]);
+
+  // Lookup Maps
+  const medicineMap = useMemo(() => {
+    const map = new Map<number, MedicineItem>();
+    medicines.forEach((m) => map.set(m.id, m));
+    return map;
+  }, [medicines]);
+
+  const supplierMap = useMemo(() => {
+    const map = new Map<number, SupplierItem>();
+    suppliers.forEach((s) => map.set(s.id, s));
+    return map;
+  }, [suppliers]);
+
+  // Client-side search within movements
+  const filteredMovements = useMemo(() => {
+    if (!searchBatchOrMed.trim()) return movements;
+    const term = searchBatchOrMed.trim().toLowerCase();
+    return movements.filter((m) => {
+      const med = m.medicineId ? medicineMap.get(m.medicineId) : undefined;
+      const medName = med?.name?.toLowerCase() || '';
+      const medCode = med?.code?.toLowerCase() || '';
+      const docCode = (m.documentCode || '').toLowerCase();
+      const batchStr = String(m.batchId);
+      return (
+        medName.includes(term) ||
+        medCode.includes(term) ||
+        docCode.includes(term) ||
+        batchStr.includes(term)
+      );
+    });
+  }, [movements, searchBatchOrMed, medicineMap]);
+
+  // Metrics summary
+  const metrics = useMemo(() => {
+    let receipts = 0;
+    let transfers = 0;
+    let dispenses = 0;
+    let adjustments = 0;
+    let exits = 0;
+
+    movements.forEach((m) => {
+      if (m.type === 'RECEIPT') receipts++;
+      else if (m.type === 'TRANSFER') transfers++;
+      else if (m.type === 'DISPENSE') dispenses++;
+      else if (m.type === 'ADJUSTMENT') adjustments++;
+      else if (m.type === 'DISPOSAL' || m.type === 'SUPPLIER_RETURN') exits++;
+    });
+
+    return {
+      total: movements.length,
+      receipts,
+      transfers,
+      dispenses,
+      adjustments,
+      exits,
+    };
+  }, [movements]);
 
   // Load batches for a medicine if not yet cached
   const ensureBatchesForMedicine = async (medId: number) => {
@@ -340,6 +455,11 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
           });
         } else {
           const sId = exitSupplierId ? parseInt(exitSupplierId, 10) : undefined;
+          if (!sId || isNaN(sId) || sId <= 0) {
+            toast.warning('Vui lòng chọn Nhà cung cấp để xuất trả hàng');
+            setActionLoading(false);
+            return;
+          }
           createdDoc = await pharmacyStockDocumentService.createSupplierReturn({
             occurredAt: new Date().toISOString(),
             stockLocation: exitLocation,
@@ -436,132 +556,300 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* 1. Header & Actions */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="p-2.5 bg-blue-50 text-blue-600 rounded-lg">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-inner">
               <FileText className="w-6 h-6" />
-            </span>
+            </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-800">
-                Quản Lý Phiếu Kho Nghiệp Vụ
-              </h1>
-              <p className="text-sm text-slate-500">
-                Nhập kho mua hàng, Điều chuyển Kho chính ➔ Quầy phát, Kiểm kê cân kho và Xuất hủy
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-slate-800">
+                  Quản Lý Phiếu Kho Nghiệp Vụ
+                </h1>
+                <Badge variant="outline" className="text-[11px] bg-slate-50 text-slate-600 border-slate-300">
+                  Kho Dược HTAC
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Nhập kho mua hàng, Điều chuyển Kho chính ➔ Quầy phát, Kiểm kê cân kho và Xuất hủy thuốc
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Action buttons grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Button
               onClick={() => {
                 setCreateTab('RECEIPT');
                 setIsCreateModalOpen(true);
               }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium py-2 px-3 shadow-sm hover:shadow"
             >
-              <ArrowDownLeft className="w-3.5 h-3.5 mr-1.5" /> + Nhập Mua Hàng
+              <ArrowDownLeft className="w-4 h-4 mr-1.5 shrink-0" />
+              <span>+ Nhập Mua Hàng</span>
             </Button>
             <Button
               onClick={() => {
                 setCreateTab('TRANSFER');
                 setIsCreateModalOpen(true);
               }}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-2 px-3 shadow-sm hover:shadow"
             >
-              <ArrowRightLeft className="w-3.5 h-3.5 mr-1.5" /> + Điều Chuyển Kho
+              <ArrowRightLeft className="w-4 h-4 mr-1.5 shrink-0" />
+              <span>+ Điều Chuyển Kho</span>
             </Button>
             <Button
               onClick={() => {
                 setCreateTab('ADJUSTMENT');
                 setIsCreateModalOpen(true);
               }}
-              className="bg-purple-600 hover:bg-purple-700 text-white text-xs"
+              className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium py-2 px-3 shadow-sm hover:shadow"
             >
-              <Layers className="w-3.5 h-3.5 mr-1.5" /> + Kiểm Kê / Cân Kho
+              <Layers className="w-4 h-4 mr-1.5 shrink-0" />
+              <span>+ Kiểm Kê Cân Kho</span>
             </Button>
             <Button
               onClick={() => {
                 setCreateTab('DISPOSAL');
                 setIsCreateModalOpen(true);
               }}
-              className="bg-rose-600 hover:bg-rose-700 text-white text-xs"
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium py-2 px-3 shadow-sm hover:shadow"
             >
-              <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" /> + Xuất Hủy / Trả NCC
+              <ArrowUpRight className="w-4 h-4 mr-1.5 shrink-0" />
+              <span>+ Xuất Hủy / Trả NCC</span>
             </Button>
           </div>
         </div>
+      </div>
 
-        {/* Thanh tìm kiếm tra cứu phiếu nhanh theo ID */}
-        <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-3">
+      {/* 2. Thống kê nhanh chỉ số hoạt động kho */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {/* Card 1: Tổng giao dịch */}
+        <div
+          onClick={() => setFilterType('')}
+          className={cn(
+            'p-3.5 rounded-xl border transition cursor-pointer hover:shadow-md bg-white',
+            filterType === '' ? 'border-blue-400 ring-2 ring-blue-400/20 bg-blue-50/40' : 'border-slate-200'
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Tổng biến động</span>
+            <span className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+              <Clock className="w-3.5 h-3.5" />
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold text-slate-800">{metrics.total}</span>
+            <span className="text-[11px] text-slate-400">lượt</span>
+          </div>
+        </div>
+
+        {/* Card 2: Nhập mua */}
+        <div
+          onClick={() => setFilterType(filterType === 'RECEIPT' ? '' : 'RECEIPT')}
+          className={cn(
+            'p-3.5 rounded-xl border transition cursor-pointer hover:shadow-md bg-white',
+            filterType === 'RECEIPT' ? 'border-emerald-400 ring-2 ring-emerald-400/20 bg-emerald-50/40' : 'border-slate-200'
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Nhập mua NCC</span>
+            <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+              <ArrowDownLeft className="w-3.5 h-3.5" />
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold text-emerald-700">{metrics.receipts}</span>
+            <span className="text-[11px] text-slate-400">lượt</span>
+          </div>
+        </div>
+
+        {/* Card 3: Điều chuyển */}
+        <div
+          onClick={() => setFilterType(filterType === 'TRANSFER' ? '' : 'TRANSFER')}
+          className={cn(
+            'p-3.5 rounded-xl border transition cursor-pointer hover:shadow-md bg-white',
+            filterType === 'TRANSFER' ? 'border-sky-400 ring-2 ring-sky-400/20 bg-sky-50/40' : 'border-slate-200'
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Điều chuyển kho</span>
+            <span className="p-1.5 rounded-lg bg-sky-100 text-sky-700">
+              <ArrowRightLeft className="w-3.5 h-3.5" />
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold text-sky-700">{metrics.transfers}</span>
+            <span className="text-[11px] text-slate-400">lượt</span>
+          </div>
+        </div>
+
+        {/* Card 4: Xuất phát quầy */}
+        <div
+          onClick={() => setFilterType(filterType === 'DISPENSE' ? '' : 'DISPENSE')}
+          className={cn(
+            'p-3.5 rounded-xl border transition cursor-pointer hover:shadow-md bg-white',
+            filterType === 'DISPENSE' ? 'border-teal-400 ring-2 ring-teal-400/20 bg-teal-50/40' : 'border-slate-200'
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Cấp phát ngoại trú</span>
+            <span className="p-1.5 rounded-lg bg-teal-100 text-teal-700">
+              <Package className="w-3.5 h-3.5" />
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold text-teal-700">{metrics.dispenses}</span>
+            <span className="text-[11px] text-slate-400">lượt</span>
+          </div>
+        </div>
+
+        {/* Card 5: Kiểm kê & Xuất hủy */}
+        <div
+          onClick={() => setFilterType(filterType === 'ADJUSTMENT' ? '' : 'ADJUSTMENT')}
+          className={cn(
+            'p-3.5 rounded-xl border transition cursor-pointer hover:shadow-md bg-white',
+            ['ADJUSTMENT', 'DISPOSAL', 'SUPPLIER_RETURN'].includes(filterType)
+              ? 'border-purple-400 ring-2 ring-purple-400/20 bg-purple-50/40'
+              : 'border-slate-200'
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Kiểm kê &amp; Hủy/Trả</span>
+            <span className="p-1.5 rounded-lg bg-purple-100 text-purple-700">
+              <Layers className="w-3.5 h-3.5" />
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold text-purple-700">{metrics.adjustments + metrics.exits}</span>
+            <span className="text-[11px] text-slate-400">lượt</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Toolbar Bộ Lọc & Tìm Kiếm */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          {/* Cụm 1: Tra cứu phiếu nhanh theo ID */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium">Tra cứu phiếu theo ID:</span>
+            <span className="text-xs text-slate-600 font-semibold whitespace-nowrap">
+              Tra cứu ID:
+            </span>
             <Input
               type="number"
               placeholder="VD: 1, 2, 3..."
               value={searchDocId}
               onChange={(e) => setSearchDocId(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && searchDocId && handleOpenDocDetail(parseInt(searchDocId, 10))}
-              className="w-32 py-1 px-2 text-xs"
+              className="w-28 py-1.5 px-2.5 text-xs font-mono"
             />
             <Button
               size="sm"
               variant="outline"
               onClick={() => searchDocId && handleOpenDocDetail(parseInt(searchDocId, 10))}
               isLoading={actionLoading}
-              className="text-xs"
+              className="text-xs py-1.5"
             >
-              Xem phiếu
+              <Eye className="w-3.5 h-3.5 mr-1" /> Xem phiếu
             </Button>
           </div>
 
-          <div className="flex-1" />
+          {/* Cụm 2: Bộ lọc thời gian & Điều kiện kho */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Khoảng ngày (Backend ReportWindow) */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+              <Calendar className="w-3.5 h-3.5 text-slate-500" />
+              <span className="text-xs text-slate-500">Từ:</span>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="text-xs bg-transparent border-0 focus:outline-none text-slate-700 font-medium cursor-pointer"
+              />
+              <span className="text-xs text-slate-400">đến</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="text-xs bg-transparent border-0 focus:outline-none text-slate-700 font-medium cursor-pointer"
+              />
+            </div>
 
-          {/* Bộ lọc loại nghiệp vụ */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="text-xs py-1 px-2 bg-slate-50 border border-slate-300 rounded"
-            >
-              <option value="">Tất cả loại nghiệp vụ</option>
-              <option value="RECEIPT">Nhập kho (RECEIPT)</option>
-              <option value="TRANSFER">Điều chuyển (TRANSFER)</option>
-              <option value="DISPENSE">Xuất phát (DISPENSE)</option>
-              <option value="ADJUSTMENT">Kiểm kê (ADJUSTMENT)</option>
-              <option value="DISPOSAL">Xuất hủy (DISPOSAL)</option>
-              <option value="PATIENT_RETURN">BN trả thuốc (PATIENT_RETURN)</option>
-              <option value="SUPPLIER_RETURN">Trả NCC (SUPPLIER_RETURN)</option>
-              <option value="OPENING">Tồn đầu kỳ (OPENING)</option>
-            </select>
+            {/* Lọc loại nghiệp vụ */}
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="text-xs py-1.5 px-2.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-700 focus:outline-none"
+              >
+                <option value="">Tất cả loại nghiệp vụ</option>
+                <option value="RECEIPT">Nhập kho (RECEIPT)</option>
+                <option value="TRANSFER">Điều chuyển (TRANSFER)</option>
+                <option value="DISPENSE">Cấp phát ngoại trú (DISPENSE)</option>
+                <option value="ADJUSTMENT">Kiểm kê / Cân kho (ADJUSTMENT)</option>
+                <option value="DISPOSAL">Xuất hủy hỏng/hết hạn (DISPOSAL)</option>
+                <option value="SUPPLIER_RETURN">Trả Nhà cung cấp (SUPPLIER_RETURN)</option>
+                <option value="PATIENT_RETURN">BN trả thuốc (PATIENT_RETURN)</option>
+                <option value="OPENING">Tồn đầu kỳ (OPENING)</option>
+              </select>
+            </div>
 
+            {/* Lọc điểm kho */}
             <select
               value={filterLocation}
               onChange={(e) => setFilterLocation(e.target.value)}
-              className="text-xs py-1 px-2 bg-slate-50 border border-slate-300 rounded"
+              className="text-xs py-1.5 px-2.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-700 focus:outline-none"
             >
               <option value="">Tất cả kho</option>
               <option value="MAIN">Kho chính (MAIN)</option>
               <option value="COUNTER">Quầy phát (COUNTER)</option>
             </select>
 
+            {/* Nút lọc & làm mới */}
             <Button
               size="sm"
               variant="outline"
               onClick={() => loadMovements()}
-              title="Làm mới"
-              className="p-1.5"
+              title="Lọc / Làm mới danh sách"
+              className="text-xs py-1.5 px-3 flex items-center gap-1.5 hover:bg-slate-100"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+              <RefreshCw className={cn('w-3.5 h-3.5 text-slate-600', loading && 'animate-spin')} />
+              <span>Lọc</span>
             </Button>
           </div>
         </div>
+
+        {/* Tìm kiếm nhanh theo tên thuốc / mã chứng từ trong danh sách đã tải */}
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Lọc nhanh theo tên thuốc, mã thuốc, lô hoặc mã chứng từ..."
+              value={searchBatchOrMed}
+              onChange={(e) => setSearchBatchOrMed(e.target.value)}
+              className="w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-blue-400"
+            />
+          </div>
+          {searchBatchOrMed && (
+            <button
+              onClick={() => setSearchBatchOrMed('')}
+              className="text-xs text-slate-400 hover:text-slate-600 underline"
+            >
+              Xóa bộ lọc tìm kiếm
+            </button>
+          )}
+          <span className="text-xs text-slate-400 ml-auto">
+            Hiển thị <strong>{filteredMovements.length}</strong> / {movements.length} dòng
+          </span>
+        </div>
       </div>
 
-      {/* 2. Bảng Danh sách Nhật ký biến động xuất nhập kho */}
+      {/* 4. Bảng Danh sách Nhật ký biến động xuất nhập kho */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -571,7 +859,7 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
             </h2>
           </div>
           <span className="text-xs text-slate-500">
-            Hiển thị tối đa 50 giao dịch gần nhất
+            Từ ngày <strong>{fromDate}</strong> đến <strong>{toDate}</strong> (Tối đa 100 giao dịch)
           </span>
         </div>
 
@@ -580,10 +868,10 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
             <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-600 mb-2" />
             Đang tải dữ liệu chứng từ kho...
           </div>
-        ) : movements.length === 0 ? (
+        ) : filteredMovements.length === 0 ? (
           <div className="p-12 text-center text-slate-400">
             <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-            Chưa có dòng biến động kho nào phù hợp với bộ lọc.
+            Chưa có dòng biến động kho nào phù hợp với bộ lọc trong khoảng ngày đã chọn.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -594,46 +882,86 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
                   <th className="py-3 px-4">Mã chứng từ</th>
                   <th className="py-3 px-4">Loại phiếu</th>
                   <th className="py-3 px-4">Kho &amp; Nhóm tồn</th>
-                  <th className="py-3 px-4">ID Lô thuốc</th>
+                  <th className="py-3 px-4">Thuốc / Mặt hàng</th>
+                  <th className="py-3 px-4">Lô thuốc</th>
                   <th className="py-3 px-4 text-right">Biến động (SL)</th>
                   <th className="py-3 px-4 text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {movements.map((m, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition">
-                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
-                      {new Date(m.occurredAt).toLocaleString('vi-VN')}
-                    </td>
-                    <td className="py-3 px-4 font-mono font-medium text-slate-800">
-                      #{m.documentCode || m.documentId}
-                    </td>
-                    <td className="py-3 px-4">{renderTypeBadge(m.type)}</td>
-                    <td className="py-3 px-4">
-                      <span className="font-semibold text-slate-700">{m.stockLocation}</span>
-                      <span className="text-slate-400"> / </span>
-                      <span className="text-slate-500">{m.stockBucket}</span>
-                    </td>
-                    <td className="py-3 px-4 font-medium text-slate-800">
-                      Lô #{m.batchId}
-                    </td>
-                    <td className="py-3 px-4 text-right font-bold text-sm">
-                      <span className={m.quantity >= 0 ? 'text-emerald-700' : 'text-rose-700'}>
-                        {m.quantity >= 0 ? `+${m.quantity}` : m.quantity}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleOpenDocDetail(m.documentId)}
-                        className="text-xs py-1 px-2.5 hover:bg-blue-50 hover:text-blue-700 border-slate-300"
-                      >
-                        <Eye className="w-3.5 h-3.5 mr-1" /> Chi tiết
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {filteredMovements.map((m, idx) => {
+                  const qty = m.deltaQuantity ?? m.quantity ?? 0;
+                  const isPositive = qty >= 0;
+                  const med = m.medicineId ? medicineMap.get(m.medicineId) : undefined;
+
+                  return (
+                    <tr key={idx} className="hover:bg-slate-50/80 transition">
+                      <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
+                        {new Date(m.occurredAt).toLocaleString('vi-VN')}
+                      </td>
+                      <td className="py-3 px-4 font-mono font-medium whitespace-nowrap">
+                        <button
+                          onClick={() => handleOpenDocDetail(m.documentId)}
+                          className="text-blue-600 hover:text-blue-800 hover:underline font-semibold"
+                          title="Bấm để xem chi tiết phiếu"
+                        >
+                          #{m.documentCode || m.documentId}
+                        </button>
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">{renderTypeBadge(m.type)}</td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className="font-semibold text-slate-700">
+                          {m.stockLocation === 'MAIN' ? 'Kho chính' : m.stockLocation === 'COUNTER' ? 'Quầy phát' : m.stockLocation}
+                        </span>
+                        <span className="text-slate-400"> / </span>
+                        <span className="text-slate-500">
+                          {m.stockBucket === 'AVAILABLE' ? 'Khả dụng' : m.stockBucket === 'QUARANTINE' ? 'Cách ly' : m.stockBucket}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        {med ? (
+                          <div>
+                            <div className="font-medium text-slate-800">{med.name}</div>
+                            <div className="text-[11px] text-slate-400">
+                              Mã: {med.code} • ĐVT: {med.baseUnit}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-slate-500 italic">
+                            Thuốc #{m.medicineId || '-'}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          Lô #{m.batchId}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <span
+                          className={cn(
+                            'font-mono font-bold text-xs px-2 py-0.5 rounded',
+                            isPositive
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          )}
+                        >
+                          {isPositive ? `+${qty.toLocaleString('vi-VN')}` : qty.toLocaleString('vi-VN')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenDocDetail(m.documentId)}
+                          className="text-xs py-1 px-2.5 hover:bg-blue-50 hover:text-blue-700 border-slate-300"
+                        >
+                          <Eye className="w-3.5 h-3.5 mr-1" /> Chi tiết
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -684,7 +1012,9 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
                 <div>
                   <span className="text-slate-400 block mb-0.5">Nhà cung cấp</span>
                   <span className="font-medium text-slate-800">
-                    ID #{selectedDoc.supplierId}
+                    {supplierMap.get(selectedDoc.supplierId)?.name
+                      ? `${supplierMap.get(selectedDoc.supplierId)?.name} (ID #${selectedDoc.supplierId})`
+                      : `ID #${selectedDoc.supplierId}`}
                   </span>
                 </div>
               )}
@@ -912,13 +1242,18 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
                     onChange={(e) => setReceiptSupplierId(e.target.value)}
                     className="w-full text-xs py-1.5 px-2 bg-slate-50 border border-slate-300 rounded"
                   >
-                    <option value="">-- Chọn Nhà cung cấp --</option>
+                    <option value="">-- Chọn Nhà cung cấp ({suppliers.length}) --</option>
                     {suppliers.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name} ({s.code})
                       </option>
                     ))}
                   </select>
+                  {suppliers.length === 0 && (
+                    <p className="text-[11px] text-amber-600 mt-1">
+                      Chưa có nhà cung cấp nào hoặc đang tải...
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1355,6 +1690,31 @@ export const PharmacyStockDocumentsPage: React.FC = () => {
                   </select>
                 </div>
               </div>
+
+              {exitType === 'SUPPLIER_RETURN' && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Nhà cung cấp nhận lại (*):
+                  </label>
+                  <select
+                    value={exitSupplierId}
+                    onChange={(e) => setExitSupplierId(e.target.value)}
+                    className="w-full text-xs py-1.5 px-2 bg-slate-50 border border-slate-300 rounded"
+                  >
+                    <option value="">-- Chọn Nhà cung cấp nhận lại ({suppliers.length}) --</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.code})
+                      </option>
+                    ))}
+                  </select>
+                  {suppliers.length === 0 && (
+                    <p className="text-[11px] text-amber-600 mt-1">
+                      Chưa có nhà cung cấp nào hoặc đang tải...
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">

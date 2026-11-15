@@ -34,6 +34,7 @@ import {
   Loader2,
   ArrowRight,
   Check,
+  Building2,
 } from 'lucide-react';
 
 /**
@@ -268,24 +269,15 @@ export const BookingPage: React.FC = () => {
       .finally(() => setIsLoadingSlots(false));
   }, [selectedDate, bookingMode, tab1SpecialtyId, tab2DoctorId]);
 
-  // Phân nhóm slots theo Buổi Sáng và Buổi Chiều
-  const { morningSlots, afternoonSlots } = useMemo(() => {
-    const morning: PublicClinicSlot[] = [];
-    const afternoon: PublicClinicSlot[] = [];
+  // Format giờ bắt đầu ngắn gọn hiển thị trên nút ca khám (VD: "08:00")
+  const formatStartTime = (startIso: string) => {
+    const s = new Date(startIso);
+    const sh = String(s.getHours()).padStart(2, '0');
+    const sm = String(s.getMinutes()).padStart(2, '0');
+    return `${sh}:${sm}`;
+  };
 
-    slots.forEach((slot) => {
-      const hour = new Date(slot.startAt).getHours();
-      if (hour < 12) {
-        morning.push(slot);
-      } else {
-        afternoon.push(slot);
-      }
-    });
-
-    return { morningSlots: morning, afternoonSlots: afternoon };
-  }, [slots]);
-
-  // Format giờ từ ISO string ("08:00 - 08:30")
+  // Format khoảng giờ đầy đủ ("08:00 – 08:30")
   const formatTimeRange = (startIso: string, endIso: string) => {
     const s = new Date(startIso);
     const e = new Date(endIso);
@@ -295,6 +287,70 @@ export const BookingPage: React.FC = () => {
     const em = String(e.getMinutes()).padStart(2, '0');
     return `${sh}:${sm} – ${eh}:${em}`;
   };
+
+  // 1. Lọc các ca còn chỗ (ẩn hoàn toàn các ca đã hết chỗ theo yêu cầu)
+  const availableSlots = useMemo(() => {
+    return slots.filter((slot) => slot.available > 0);
+  }, [slots]);
+
+  // 2. Gom nhóm các ca khám theo Phòng khám & Bác sĩ (Kiểu Bệnh viện Bạch Mai)
+  const clinicGroups = useMemo(() => {
+    const groupsMap = new Map<
+      string,
+      {
+        key: string;
+        roomId: number;
+        roomName: string;
+        doctorId: number;
+        doctorName: string;
+        specialtyName: string;
+        morningSlots: PublicClinicSlot[];
+        afternoonSlots: PublicClinicSlot[];
+        totalAvailable: number;
+      }
+    >();
+
+    availableSlots.forEach((slot) => {
+      const key = `${slot.roomId}_${slot.doctorId}`;
+      let group = groupsMap.get(key);
+
+      if (!group) {
+        const doc = doctorLookup.get(slot.doctorId);
+        const doctorName = doc
+          ? `${doc.professionalTitle ? `${doc.professionalTitle} ` : ''}${doc.fullName}`
+          : 'Bác sĩ phụ trách';
+
+        group = {
+          key,
+          roomId: slot.roomId,
+          roomName: slot.roomName,
+          doctorId: slot.doctorId,
+          doctorName,
+          specialtyName: slot.specialtyName,
+          morningSlots: [],
+          afternoonSlots: [],
+          totalAvailable: 0,
+        };
+        groupsMap.set(key, group);
+      }
+
+      const hour = new Date(slot.startAt).getHours();
+      if (hour < 12) {
+        group.morningSlots.push(slot);
+      } else {
+        group.afternoonSlots.push(slot);
+      }
+      group.totalAvailable += 1;
+    });
+
+    // Sắp xếp các ca trong mỗi buổi theo giờ bắt đầu tăng dần
+    groupsMap.forEach((g) => {
+      g.morningSlots.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+      g.afternoonSlots.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+    });
+
+    return Array.from(groupsMap.values());
+  }, [availableSlots, doctorLookup]);
 
   // Mở Modal Phiếu khám khi bấm nút "Tiếp tục"
   const handleOpenConfirmModal = () => {
@@ -772,10 +828,10 @@ export const BookingPage: React.FC = () => {
                 </div>
 
                 {selectedSlot && (
-                  <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 flex items-center gap-1.5 shadow-2xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span>
-                      Đã chọn ca: <strong>{formatTimeRange(selectedSlot.startAt, selectedSlot.endAt)}</strong>
+                      Đã chọn ca: <strong>{formatTimeRange(selectedSlot.startAt, selectedSlot.endAt)}</strong> (bắt đầu lúc {formatStartTime(selectedSlot.startAt)}) • {selectedSlot.roomName}
                     </span>
                   </div>
                 )}
@@ -819,148 +875,168 @@ export const BookingPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* LƯỚI KHUNG GIỜ KHÁM (SLOTS GRID) */}
+              {/* LƯỚI KHUNG GIỜ KHÁM CHIA THEO PHÒNG/BÁC SĨ (CHUẨN GIAO DIỆN BẠCH MAI) */}
               <div className="space-y-5 pt-3 border-t border-slate-100">
                 {isLoadingSlots ? (
                   <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400 text-xs">
                     <Loader2 className="w-6 h-6 animate-spin text-sky-600" />
                     <span>Đang tìm kiếm các ca khám còn trống...</span>
                   </div>
-                ) : slots.length === 0 ? (
+                ) : availableSlots.length === 0 ? (
                   <div className="p-8 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-2">
                     <Clock className="w-8 h-8 text-slate-300 mx-auto" />
                     <div className="text-xs font-semibold text-slate-700">
                       Không có khung giờ khám khả dụng trong ngày này
                     </div>
                     <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                      Hiện tại chưa có ca khám mở hoặc đã hết chỗ trong ngày này. Vui lòng chọn ngày khác trong tuần.
+                      Hiện tại chưa có ca khám mở hoặc tất cả các ca khám trong ngày đã kín chỗ. Vui lòng chọn ngày khác trong tuần.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {/* BUỔI SÁNG */}
-                    {morningSlots.length > 0 && (
-                      <div className="space-y-2.5">
-                        <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-amber-400" />
-                          <span>Buổi Sáng (08:00 – 12:00)</span>
+                    {clinicGroups.map((group) => (
+                      <div
+                        key={group.key}
+                        className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-2xs transition-all hover:border-slate-300"
+                      >
+                        {/* HEADER PHÒNG KHÁM & BÁC SĨ (THEO MẪU BỆNH VIỆN BẠCH MAI) */}
+                        <div className="bg-gradient-to-r from-sky-50/80 via-slate-50 to-white px-4 sm:px-6 py-3.5 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200/60 shadow-2xs">
+                              {bookingMode === 'by_doctor' ? (
+                                <Stethoscope className="w-4 h-4" />
+                              ) : (
+                                <Building2 className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900 flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                <span>{group.roomName}</span>
+                                <span className="text-slate-300 hidden sm:inline">•</span>
+                                <span className="text-sky-700 font-semibold">{group.doctorName}</span>
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                Chuyên khoa:{' '}
+                                <span className="font-medium text-slate-700">{group.specialtyName}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/80 shadow-2xs">
+                            {group.totalAvailable} ca còn chỗ
+                          </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                          {morningSlots.map((slot) => {
-                            const isSelected = selectedSlot?.id === slot.id;
-                            const isFull = slot.available <= 0;
-                            const doc = doctorLookup.get(slot.doctorId);
 
-                            return (
-                              <button
-                                key={slot.id}
-                                type="button"
-                                disabled={isFull}
-                                onClick={() => setSelectedSlot(slot)}
-                                className={cn(
-                                  'p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between relative group',
-                                  isFull
-                                    ? 'opacity-40 bg-slate-100 border-slate-200 cursor-not-allowed'
-                                    : isSelected
-                                    ? 'bg-sky-50 border-sky-500 ring-2 ring-sky-500/20 shadow-xs'
-                                    : 'bg-white border-slate-200 hover:border-sky-300 hover:bg-sky-50/40 shadow-2xs'
-                                )}
-                              >
-                                {isSelected && (
-                                  <div className="absolute top-2 right-2 w-3.5 h-3.5 rounded-full bg-sky-600 text-white flex items-center justify-center">
-                                    <Check className="w-2 h-2" />
-                                  </div>
-                                )}
-                                <div className="space-y-1">
-                                  <div className="text-xs sm:text-sm font-extrabold text-slate-900">
-                                    {formatTimeRange(slot.startAt, slot.endAt)}
-                                  </div>
-                                  <div className="text-[11px] font-semibold text-sky-700 truncate">
-                                    {doc ? `${doc.professionalTitle ? `${doc.professionalTitle} ` : ''}${doc.fullName}` : 'Bác sĩ phụ trách'}
-                                  </div>
-                                  <div className="text-[10px] text-slate-500 truncate">
-                                    {slot.roomName} • {slot.specialtyName}
-                                  </div>
-                                </div>
+                        {/* NỘI DUNG DANH SÁCH CÁC KHUNG GIỜ NHỎ (PILL BUTTONS) */}
+                        <div className="p-4 sm:p-6 space-y-5">
+                          {/* BUỔI SÁNG */}
+                          {group.morningSlots.length > 0 && (
+                            <div className="space-y-2.5">
+                              <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                                <span>Buổi Sáng (08:00 – 12:00)</span>
+                              </div>
+                              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3">
+                                {group.morningSlots.map((slot) => {
+                                  const isSelected = selectedSlot?.id === slot.id;
+                                  return (
+                                    <button
+                                      key={slot.id}
+                                      type="button"
+                                      onClick={() => setSelectedSlot(slot)}
+                                      className={cn(
+                                        'group relative flex flex-col items-center justify-center py-2.5 px-2 rounded-xl border text-center transition-all cursor-pointer',
+                                        isSelected
+                                          ? 'bg-sky-600 border-sky-600 text-white shadow-md shadow-sky-600/30 ring-2 ring-sky-600/20'
+                                          : 'bg-white border-slate-200 text-slate-800 hover:border-sky-400 hover:bg-sky-50/50 hover:shadow-xs'
+                                      )}
+                                      title={`Ca ${formatTimeRange(slot.startAt, slot.endAt)}: Còn ${slot.available} chỗ`}
+                                    >
+                                      {isSelected && (
+                                        <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white text-sky-600 flex items-center justify-center shadow-xs border border-sky-200">
+                                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                        </div>
+                                      )}
+                                      <span
+                                        className={cn(
+                                          'text-sm font-extrabold tracking-tight',
+                                          isSelected ? 'text-white' : 'text-slate-900 group-hover:text-sky-700'
+                                        )}
+                                      >
+                                        {formatStartTime(slot.startAt)}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          'text-[10px] font-semibold mt-0.5',
+                                          isSelected
+                                            ? 'text-sky-100'
+                                            : 'text-emerald-600 group-hover:text-emerald-700'
+                                        )}
+                                      >
+                                        Còn {slot.available} chỗ
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
 
-                                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-100 text-[10px]">
-                                  <span
-                                    className={cn(
-                                      'font-semibold',
-                                      isFull ? 'text-slate-400' : 'text-emerald-600'
-                                    )}
-                                  >
-                                    {isFull ? 'Hết chỗ' : `Còn ${slot.available} chỗ`}
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })}
+                          {/* BUỔI CHIỀU */}
+                          {group.afternoonSlots.length > 0 && (
+                            <div className="space-y-2.5 pt-3 border-t border-slate-100">
+                              <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-sky-500" />
+                                <span>Buổi Chiều (13:30 – 17:00)</span>
+                              </div>
+                              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3">
+                                {group.afternoonSlots.map((slot) => {
+                                  const isSelected = selectedSlot?.id === slot.id;
+                                  return (
+                                    <button
+                                      key={slot.id}
+                                      type="button"
+                                      onClick={() => setSelectedSlot(slot)}
+                                      className={cn(
+                                        'group relative flex flex-col items-center justify-center py-2.5 px-2 rounded-xl border text-center transition-all cursor-pointer',
+                                        isSelected
+                                          ? 'bg-sky-600 border-sky-600 text-white shadow-md shadow-sky-600/30 ring-2 ring-sky-600/20'
+                                          : 'bg-white border-slate-200 text-slate-800 hover:border-sky-400 hover:bg-sky-50/50 hover:shadow-xs'
+                                      )}
+                                      title={`Ca ${formatTimeRange(slot.startAt, slot.endAt)}: Còn ${slot.available} chỗ`}
+                                    >
+                                      {isSelected && (
+                                        <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white text-sky-600 flex items-center justify-center shadow-xs border border-sky-200">
+                                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                        </div>
+                                      )}
+                                      <span
+                                        className={cn(
+                                          'text-sm font-extrabold tracking-tight',
+                                          isSelected ? 'text-white' : 'text-slate-900 group-hover:text-sky-700'
+                                        )}
+                                      >
+                                        {formatStartTime(slot.startAt)}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          'text-[10px] font-semibold mt-0.5',
+                                          isSelected
+                                            ? 'text-sky-100'
+                                            : 'text-emerald-600 group-hover:text-emerald-700'
+                                        )}
+                                      >
+                                        Còn {slot.available} chỗ
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    )}
-
-                    {/* BUỔI CHIỀU */}
-                    {afternoonSlots.length > 0 && (
-                      <div className="space-y-2.5">
-                        <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-sky-500" />
-                          <span>Buổi Chiều (13:30 – 17:00)</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                          {afternoonSlots.map((slot) => {
-                            const isSelected = selectedSlot?.id === slot.id;
-                            const isFull = slot.available <= 0;
-                            const doc = doctorLookup.get(slot.doctorId);
-
-                            return (
-                              <button
-                                key={slot.id}
-                                type="button"
-                                disabled={isFull}
-                                onClick={() => setSelectedSlot(slot)}
-                                className={cn(
-                                  'p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between relative group',
-                                  isFull
-                                    ? 'opacity-40 bg-slate-100 border-slate-200 cursor-not-allowed'
-                                    : isSelected
-                                    ? 'bg-sky-50 border-sky-500 ring-2 ring-sky-500/20 shadow-xs'
-                                    : 'bg-white border-slate-200 hover:border-sky-300 hover:bg-sky-50/40 shadow-2xs'
-                                )}
-                              >
-                                {isSelected && (
-                                  <div className="absolute top-2 right-2 w-3.5 h-3.5 rounded-full bg-sky-600 text-white flex items-center justify-center">
-                                    <Check className="w-2 h-2" />
-                                  </div>
-                                )}
-                                <div className="space-y-1">
-                                  <div className="text-xs sm:text-sm font-extrabold text-slate-900">
-                                    {formatTimeRange(slot.startAt, slot.endAt)}
-                                  </div>
-                                  <div className="text-[11px] font-semibold text-sky-700 truncate">
-                                    {doc ? `${doc.professionalTitle ? `${doc.professionalTitle} ` : ''}${doc.fullName}` : 'Bác sĩ phụ trách'}
-                                  </div>
-                                  <div className="text-[10px] text-slate-500 truncate">
-                                    {slot.roomName} • {slot.specialtyName}
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-100 text-[10px]">
-                                  <span
-                                    className={cn(
-                                      'font-semibold',
-                                      isFull ? 'text-slate-400' : 'text-emerald-600'
-                                    )}
-                                  >
-                                    {isFull ? 'Hết chỗ' : `Còn ${slot.available} chỗ`}
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    ))}
                   </div>
                 )}
               </div>
