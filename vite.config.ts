@@ -12,9 +12,12 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'https://ladle-sighing-backward.ngrok-free.dev',
         changeOrigin: true,
         secure: false,
+        headers: {
+            'ngrok-skip-browser-warning': 'true',
+          },
       },
     },
   },
