@@ -76,6 +76,7 @@ class ApiService {
           credentials: 'same-origin',
           headers: {
             'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true',
           },
         });
 
@@ -117,6 +118,11 @@ class ApiService {
     // Đảm bảo nhận JSON
     if (!headers.has('Accept')) {
       headers.set('Accept', 'application/json');
+    }
+
+    // Bỏ qua trang cảnh báo của ngrok
+    if (!headers.has('ngrok-skip-browser-warning')) {
+      headers.set('ngrok-skip-browser-warning', 'true');
     }
 
     // Tự động set Content-Type nếu có body và không phải FormData
