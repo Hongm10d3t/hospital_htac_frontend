@@ -1,60 +1,136 @@
-import React from 'react';
-import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/Button';
 import {
   Activity,
   Calendar,
+  ChevronDown,
   Clock,
   HeartHandshake,
+  KeyRound,
   LogOut,
   MapPin,
+  Menu,
   PhoneCall,
+  Pill,
   ShieldCheck,
   Stethoscope,
   User,
+  X,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 /**
  * Khung giao diện công khai dành cho Cổng Bệnh nhân (Public/Patient Layout)
- * Chế độ PERSUADE & SERVICE: Thân thiện, tạo cảm giác an tâm y tế, tối ưu trải nghiệm di động.
+ * Giữ nguyên 100% style thiết kế gốc của HTAC (xanh sky, cyan, slate hiện đại).
+ * 
+ * Sắp xếp lại bố cục Menu theo cấu trúc khoa học (tham khảo bố cục Bạch Mai):
+ * - Top bar trên cùng: Gọn gàng, chỉ chứa Hotline, Địa chỉ, Lời chào người dùng & Đăng xuất.
+ * - Header chính: Logo HTAC, Menu cơ bản (Trang chủ, Danh bạ bác sĩ, Đặt lịch khám).
+ * - Dropdown "Cá nhân ˅": Gom toàn bộ tính năng người bệnh (Hồ sơ, Lịch hẹn, Sổ sức khỏe, Đơn thuốc, Đổi mật khẩu) 
+ *   thay vì dàn trải làm chật chội thanh điều hướng.
  */
 export const PublicLayout: React.FC = () => {
   const { user, isAuthenticated, logout, hospitalConfig: config } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Trạng thái Dropdown "Cá nhân"
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Trạng thái Mobile menu
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+
+  // Tự động đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Tự động đóng menu khi chuyển route
+  useEffect(() => {
+    setIsUserMenuOpen(false);
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-800 antialiased selection:bg-sky-100 selection:text-sky-900">
-      {/* 1. THANH THÔNG TIN KHẨN CẤP TRÊN CÙNG (TOP BAR) */}
+      {/* =========================================================================
+          1. THANH TIỆN ÍCH TRÊN CÙNG (TOP BAR GỐC CỦA HTAC - SẮP XẾP LẠI GỌN GÀNG)
+         ========================================================================= */}
       <div className="bg-sky-900 text-sky-100 text-xs py-2 px-4 sm:px-8 border-b border-sky-800/60">
         <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
+          {/* Bên trái: Địa chỉ bệnh viện & Hotline */}
           <div className="flex items-center gap-4 text-[11px] sm:text-xs">
             <span className="flex items-center gap-1.5 text-sky-200">
-              <Clock className="w-3.5 h-3.5 text-cyan-400" />
-              Khám bệnh: Thứ 2 - Thứ 7 (07:30 - 17:00) | Cấp cứu: 24/7
-            </span>
-            <span className="hidden md:flex items-center gap-1.5 text-sky-200">
               <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-              {config?.address || 'Khu Y tế Chất lượng cao HTAC'}
+              <span>{config?.address || 'Số 123 Đường Giải Phóng, Quận Đống Đa, Hà Nội'}</span>
             </span>
-          </div>
-          <div className="flex items-center gap-4 text-[11px] sm:text-xs">
+            <span className="hidden md:inline text-sky-700">|</span>
             <a
               href={`tel:${config?.phone || '1900-8888'}`}
-              className="flex items-center gap-1.5 font-bold text-cyan-300 hover:text-white transition-colors"
+              className="hidden md:flex items-center gap-1.5 font-bold text-cyan-300 hover:text-white transition-colors"
             >
               <PhoneCall className="w-3.5 h-3.5" />
-              Hotline Cấp cứu: {config?.phone || '1900-8888'}
+              Hotline: {config?.phone || '1900 8888'}
             </a>
+          </div>
+
+          {/* Bên phải: Lời chào người dùng / Đăng nhập / Đăng xuất */}
+          <div className="flex items-center gap-3 text-[11px] sm:text-xs">
+            {isAuthenticated && user ? (
+              <div className="flex items-center gap-3">
+                <span className="text-sky-200">
+                  Xin chào, <strong className="text-white font-bold">{user.fullName || user.username}</strong>
+                </span>
+                <span className="text-sky-700">|</span>
+                <button
+                  type="button"
+                  onClick={() => logout().then(() => navigate('/'))}
+                  className="flex items-center gap-1 text-sky-300 hover:text-rose-300 transition-colors font-medium cursor-pointer"
+                  title="Đăng xuất"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Đăng xuất</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                <Link
+                  to="/login"
+                  className="font-bold text-cyan-300 hover:text-white transition-colors"
+                >
+                  Đăng nhập
+                </Link>
+                <span className="text-sky-700">|</span>
+                <Link
+                  to="/register"
+                  className="text-sky-200 hover:text-white transition-colors font-medium"
+                >
+                  Đăng ký tài khoản
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 2. THANH ĐIỀU HƯỚNG CHÍNH (NAVIGATION) */}
+      {/* =========================================================================
+          2. THANH ĐIỀU HƯỚNG CHÍNH (NAVIGATION HEADER THEO STYLE GỐC HTAC)
+             Menu được sắp xếp lại khoa học: Trang chủ, Bác sĩ, Đặt khám & Dropdown "Cá nhân ˅"
+         ========================================================================= */}
       <header className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-18 flex items-center justify-between">
-          {/* Logo Bệnh viện */}
+          {/* Logo Bệnh viện HTAC (Style gốc) */}
           <Link to="/" className="flex items-center gap-3 group">
             <img
               src={config?.logoUrl || '/logo.png'}
@@ -71,7 +147,7 @@ export const PublicLayout: React.FC = () => {
             </div>
           </Link>
 
-          {/* Menu Điều hướng */}
+          {/* Menu Điều hướng Desktop: Sắp xếp gọn gàng theo bố cục Bạch Mai */}
           <nav className="hidden md:flex items-center gap-1">
             <NavLink
               to="/"
@@ -84,6 +160,7 @@ export const PublicLayout: React.FC = () => {
             >
               Trang chủ
             </NavLink>
+
             <NavLink
               to="/doctors"
               className={({ isActive }) =>
@@ -96,6 +173,7 @@ export const PublicLayout: React.FC = () => {
               <Stethoscope className="w-4 h-4 text-sky-500" />
               Danh bạ Bác sĩ
             </NavLink>
+
             <NavLink
               to="/booking"
               className={({ isActive }) =>
@@ -108,90 +186,221 @@ export const PublicLayout: React.FC = () => {
               <Calendar className="w-4 h-4 text-cyan-500" />
               Đặt lịch khám
             </NavLink>
+
+            {/* DROPDOWN "CÁ NHÂN ˅" - GOM TOÀN BỘ CÁC TÍNH NĂNG BỆNH NHÂN */}
             {isAuthenticated && user?.role === 'PATIENT' && (
-              <>
-                <NavLink
-                  to="/patient/appointments"
-                  className={({ isActive }) =>
-                    cn(
-                      'px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5',
-                      isActive ? 'text-sky-600 bg-sky-50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    )
-                  }
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className={cn(
+                    'px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer',
+                    isUserMenuOpen || location.pathname.startsWith('/patient')
+                      ? 'text-sky-700 bg-sky-50 shadow-2xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  )}
                 >
-                  <Clock className="w-4 h-4 text-emerald-500" />
-                  Lịch hẹn của tôi
-                </NavLink>
-                <NavLink
-                  to="/patient/history"
-                  className={({ isActive }) =>
-                    cn(
-                      'px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5',
-                      isActive ? 'text-sky-600 bg-sky-50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    )
-                  }
-                >
-                  <Activity className="w-4 h-4 text-sky-500" />
-                  Sổ sức khỏe
-                </NavLink>
-              </>
+                  <User className="w-4 h-4 text-sky-600" />
+                  <span>Cá nhân</span>
+                  <ChevronDown
+                    className={cn(
+                      'w-3.5 h-3.5 text-slate-400 transition-transform duration-200',
+                      isUserMenuOpen && 'rotate-180 text-sky-600'
+                    )}
+                  />
+                </button>
+
+                {/* Khung Dropdown theo style gốc HTAC (bo góc tròn, đổ bóng mềm, viền slate) */}
+                {isUserMenuOpen && (
+                  <div className="absolute left-0 top-full mt-1.5 w-60 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 text-xs font-semibold">
+                    <Link
+                      to="/patient/profile"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3.5 py-2.5 text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition-colors"
+                    >
+                      <User className="w-4 h-4 text-sky-600 shrink-0" />
+                      <span>Thông tin cá nhân</span>
+                    </Link>
+
+                    <Link
+                      to="/patient/appointments"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3.5 py-2.5 text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition-colors"
+                    >
+                      <Clock className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Lịch sử đặt lịch khám</span>
+                    </Link>
+
+                    <Link
+                      to="/patient/history"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3.5 py-2.5 text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition-colors"
+                    >
+                      <Activity className="w-4 h-4 text-sky-600 shrink-0" />
+                      <span>Kết quả khám bệnh</span>
+                    </Link>
+
+                    <Link
+                      to="/patient/prescriptions"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3.5 py-2.5 text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition-colors"
+                    >
+                      <Pill className="w-4 h-4 text-rose-500 shrink-0" />
+                      <span>Đơn thuốc điện tử</span>
+                    </Link>
+
+                    <Link
+                      to="/patient/change-password"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3.5 py-2.5 text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition-colors border-t border-slate-100"
+                    >
+                      <KeyRound className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>Thay đổi mật khẩu</span>
+                    </Link>
+
+                    <div className="border-t border-slate-100 my-1" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        logout().then(() => navigate('/'));
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-rose-600 hover:bg-rose-50 transition-colors text-left font-bold cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4 text-rose-500 shrink-0" />
+                      <span>Đăng xuất</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Menu cho ADMIN nếu có */}
+            {isAuthenticated && user?.role === 'ADMIN' && (
+              <NavLink
+                to="/admin/dashboard"
+                className={({ isActive }) =>
+                  cn(
+                    'px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors',
+                    isActive ? 'text-sky-600 bg-sky-50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  )
+                }
+              >
+                Trang Quản trị
+              </NavLink>
             )}
           </nav>
 
-          {/* Khu vực Hành động Người dùng */}
-          <div className="flex items-center gap-3">
-            {isAuthenticated && user ? (
-              <div className="flex items-center gap-3">
+          {/* Khu vực Nút Hành Động Bên Phải (Style gốc HTAC) */}
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Calendar className="w-4 h-4" />}
+              onClick={() => navigate('/booking')}
+              className="hidden sm:inline-flex"
+            >
+              Đặt lịch khám
+            </Button>
+
+            {/* Nút Mobile Hamburger */}
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Khung Mobile Menu Dropdown */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden bg-white border-t border-slate-200 px-4 py-3 space-y-1 text-xs font-semibold shadow-lg">
+            <Link
+              to="/"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block py-2 px-3 rounded-lg hover:bg-slate-50 text-slate-700"
+            >
+              Trang chủ
+            </Link>
+            <Link
+              to="/doctors"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block py-2 px-3 rounded-lg hover:bg-slate-50 text-slate-700"
+            >
+              Danh bạ Bác sĩ
+            </Link>
+            <Link
+              to="/booking"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block py-2 px-3 rounded-lg hover:bg-slate-50 text-slate-700"
+            >
+              Đặt lịch khám
+            </Link>
+
+            {isAuthenticated && user?.role === 'PATIENT' && (
+              <div className="pt-2 border-t border-slate-100 space-y-1">
+                <div className="text-[10px] text-slate-400 uppercase px-3 py-1 font-bold">
+                  Khu vực cá nhân:
+                </div>
                 <Link
-                  to={user.role === 'ADMIN' ? '/admin/dashboard' : '/patient/appointments'}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-50 text-sky-800 text-xs font-semibold hover:bg-sky-100 transition-colors"
-                  title="Xem lịch hẹn cá nhân"
+                  to="/patient/profile"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-sky-50 text-slate-700"
                 >
                   <User className="w-4 h-4 text-sky-600" />
-                  <span>{user.fullName || user.username}</span>
+                  <span>Thông tin cá nhân</span>
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => logout().then(() => navigate('/'))}
-                  className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
-                  title="Đăng xuất"
+                <Link
+                  to="/patient/appointments"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-sky-50 text-slate-700"
                 >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => navigate('/login')}>
-                  Đăng nhập
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate('/register')}
-                  className="hidden sm:inline-flex border-sky-300 text-sky-700 bg-sky-50 hover:bg-sky-100"
+                  <Clock className="w-4 h-4 text-emerald-600" />
+                  <span>Lịch sử đặt lịch khám</span>
+                </Link>
+                <Link
+                  to="/patient/history"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-sky-50 text-slate-700"
                 >
-                  Đăng ký
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  leftIcon={<Calendar className="w-4 h-4" />}
-                  onClick={() => navigate('/booking')}
+                  <Activity className="w-4 h-4 text-sky-600" />
+                  <span>Kết quả khám bệnh</span>
+                </Link>
+                <Link
+                  to="/patient/prescriptions"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-sky-50 text-slate-700"
                 >
-                  Đặt lịch ngay
-                </Button>
+                  <Pill className="w-4 h-4 text-rose-500" />
+                  <span>Đơn thuốc điện tử</span>
+                </Link>
+                <Link
+                  to="/patient/change-password"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-sky-50 text-slate-700"
+                >
+                  <KeyRound className="w-4 h-4 text-amber-500" />
+                  <span>Thay đổi mật khẩu</span>
+                </Link>
               </div>
             )}
           </div>
-        </div>
+        )}
       </header>
 
-      {/* 3. NỘI DUNG CHÍNH (MAIN OUTLET) */}
+      {/* =========================================================================
+          3. NỘI DUNG CHÍNH (MAIN OUTLET)
+         ========================================================================= */}
       <main className="flex-1">
         <Outlet />
       </main>
 
-      {/* 4. CHÂN TRANG Y TẾ TIN CẬY (FOOTER) */}
+      {/* =========================================================================
+          4. CHÂN TRANG Y TẾ TIN CẬY (FOOTER STYLE GỐC HTAC)
+         ========================================================================= */}
       <footer className="bg-slate-900 text-slate-300 pt-12 pb-8 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 text-xs">
           {/* Cột 1: Thông tin Viện */}
@@ -246,7 +455,12 @@ export const PublicLayout: React.FC = () => {
               </li>
               <li>
                 <Link to="/patient/history" className="hover:text-white transition-colors">
-                  Sổ sức khỏe điện tử (EHR) &amp; Toa thuốc
+                  Sổ sức khỏe điện tử (EHR)
+                </Link>
+              </li>
+              <li>
+                <Link to="/patient/prescriptions" className="hover:text-white transition-colors">
+                  Tra cứu Đơn thuốc điện tử
                 </Link>
               </li>
               <li>

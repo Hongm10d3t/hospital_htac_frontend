@@ -9,11 +9,6 @@ import {
   type ReceptionVisit,
 } from '../../services/receptionCheckinService';
 import {
-  clinicDirectoryService,
-  type ClinicRoomResponse,
-  type SpecialtyResponse,
-} from '../../services/clinicDirectoryService';
-import {
   publicDoctorService,
   type DoctorPublicResponse,
   type PublicClinicSlotResponse,
@@ -37,86 +32,113 @@ import {
   Grid,
   List,
   X,
+  Clock,
+  Clock3,
+  AlertTriangle,
+  DoorOpen,
+  CalendarDays,
 } from 'lucide-react';
+
+/** Thông tin chuẩn hóa của một Phòng khám phục vụ giám sát hàng đợi */
+export interface ClinicRoomInfo {
+  id: number;
+  name: string;
+  location?: string;
+  specialtyId?: number;
+  specialtyName?: string;
+  doctorId?: number;
+  doctorName?: string;
+}
+
+/** Thông tin Chuyên khoa */
+export interface SpecialtyItem {
+  id: number;
+  name: string;
+}
 
 /**
  * F03.04 — Bảng điều khiển Giám sát Hàng đợi Phòng khám (Reception Queue Dashboard)
  * Phân hệ Tiếp đón bệnh nhân (Receptionist Portal)
- * Chuẩn phong cách thiết kế OPERATE: Mật độ dữ liệu cao, cập nhật realtime, thao tác dứt khoát.
+ * 
+ * Quy tắc nghiệp vụ:
+ * 1. Hàng đợi chỉ quản lý trong ngày (Hôm nay).
+ * 2. Cung cấp góc nhìn toàn viện (KPIs tổng quan) song song với giám sát chuyên sâu theo từng phòng.
+ * 3. Tối ưu công thái học (OPERATE) cho lưu lượng bệnh nhân lớn: 3 chế độ xem linh hoạt:
+ *    - 'room': Theo từng phòng khám (Room Deep-Dive View) - Trọng tâm điều phối.
+ *    - 'grid': Ma trận thẻ phòng (Multi-Room Grid/Kanban Board).
+ *    - 'table': Toàn viện tra cứu (All-Hospital Master Table Search).
+ * 4. Tương thích 100% với backend, không phụ thuộc vào các API admin gây lỗi 403.
  */
 export const ReceptionQueuePage: React.FC = () => {
   const toast = useToast();
   const { hospitalConfig } = useAuth();
 
-  // 1. Quản lý Ngày giám sát
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // 1. Quản lý Ngày giám sát: Cố định "HÔM NAY" theo giờ bệnh viện địa phương
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }, []);
+
   const tomorrowStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   }, []);
-  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
-  // 2. Tùy chọn Tự động làm mới (Auto-refresh)
+  // 2. Chế độ hiển thị: 'room' (Theo phòng) | 'grid' (Ma trận phòng) | 'table' (Bảng toàn viện)
+  const [viewMode, setViewMode] = useState<'room' | 'grid' | 'table'>('room');
+
+  // Phòng đang được chọn để giám sát chuyên sâu (trong chế độ 'room')
+  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
+
+  // 3. Tùy chọn Tự động làm mới (Auto-refresh)
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(30); // 0 = tắt, 15s, 30s, 60s
   const [countdown, setCountdown] = useState<number>(30);
   const timerRef = useRef<any>(null);
 
-  // 3. Chế độ hiển thị: 'grid' (Thẻ phòng khám) | 'table' (Bảng danh sách chi tiết)
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
-
-  // 4. Danh mục Master Data
-  const [rooms, setRooms] = useState<ClinicRoomResponse[]>([]);
-  const [specialties, setSpecialties] = useState<SpecialtyResponse[]>([]);
-  const [doctors, setDoctors] = useState<DoctorPublicResponse[]>([]);
+  // 4. Dữ liệu Hàng đợi & Ca trực
   const [todaySlots, setTodaySlots] = useState<PublicClinicSlotResponse[]>([]);
-
-  // 5. Dữ liệu Hàng đợi & Báo cáo
+  const [doctors, setDoctors] = useState<DoctorPublicResponse[]>([]);
   const [waitingVisits, setWaitingVisits] = useState<ReceptionVisit[]>([]);
   const [reportRows, setReportRows] = useState<VisitReportRow[]>([]);
   const [patientCache, setPatientCache] = useState<Map<number, PatientRecord>>(new Map());
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // 6. Bộ lọc
+  // 5. Bộ lọc tìm kiếm
   const [searchKw, setSearchKw] = useState<string>('');
-  const [selectedRoomFilter, setSelectedRoomFilter] = useState<string | number>('ALL');
   const [selectedSpecialtyFilter, setSelectedSpecialtyFilter] = useState<string | number>('ALL');
+  const [selectedRoomFilter, setSelectedRoomFilter] = useState<string | number>('ALL');
 
-  // 7. Modal In Phiếu STT
+  // 6. Modal In Phiếu STT nhiệt
   const [isTicketModalOpen, setIsTicketModalOpen] = useState<boolean>(false);
   const [selectedTicketVisit, setSelectedTicketVisit] = useState<ReceptionVisit | null>(null);
 
-  // 8. Modal Báo vắng (NOT_COMPLETED) hoặc Hủy tiếp nhận (VOIDED)
+  // 7. Modal Báo vắng (NOT_COMPLETED) hoặc Hủy tiếp nhận (VOIDED)
   const [outcomeAction, setOutcomeAction] = useState<'not_complete' | 'void' | null>(null);
   const [outcomeVisit, setOutcomeVisit] = useState<ReceptionVisit | null>(null);
   const [outcomeReason, setOutcomeReason] = useState<string>('');
   const [isSubmittingOutcome, setIsSubmittingOutcome] = useState<boolean>(false);
 
-  // Tải danh mục Master Data ban đầu
+  // =========================================================================
+  // TẢI DỮ LIỆU BAN ĐẦU (PUBLIC APIS ĐẢM BẢO KHÔNG BỊ 403)
+  // =========================================================================
   useEffect(() => {
-    const fetchMasterData = async () => {
+    const fetchDoctors = async () => {
       try {
-        const [roomRes, specRes, docRes] = await Promise.all([
-          clinicDirectoryService.listClinicRooms({ size: 100 }),
-          clinicDirectoryService.listSpecialties({ size: 100 }),
-          publicDoctorService.listDoctors({ size: 100 }),
-        ]);
-        setRooms(roomRes.items);
-        setSpecialties(specRes.items);
+        const docRes = await publicDoctorService.listDoctors({ size: 100 });
         setDoctors(docRes.items);
       } catch (err) {
-        console.warn('[ReceptionQueue] Lỗi tải dữ liệu phòng & bác sĩ:', err);
+        console.warn('[ReceptionQueue] Lỗi tải danh mục bác sĩ công khai:', err);
       }
     };
-    fetchMasterData();
+    fetchDoctors();
   }, []);
-
-  // Lookup maps
-  const roomMap = useMemo(() => {
-    const map = new Map<number, ClinicRoomResponse>();
-    rooms.forEach((r) => map.set(r.id, r));
-    return map;
-  }, [rooms]);
 
   const doctorMap = useMemo(() => {
     const map = new Map<number, DoctorPublicResponse>();
@@ -124,39 +146,103 @@ export const ReceptionQueuePage: React.FC = () => {
     return map;
   }, [doctors]);
 
-  // Tải dữ liệu hàng đợi & báo cáo ca khám theo ngày đã chọn
+  // Trích xuất danh sách Phòng khám hoạt động hôm nay từ Slots và Waiting Visits
+  const activeRooms = useMemo<ClinicRoomInfo[]>(() => {
+    const map = new Map<number, ClinicRoomInfo>();
+
+    // 1. Trích xuất từ ca khám hôm nay
+    todaySlots.forEach((slot) => {
+      if (!map.has(slot.roomId)) {
+        map.set(slot.roomId, {
+          id: slot.roomId,
+          name: slot.roomName || `Phòng khám ${slot.roomId}`,
+          location: 'Tòa nhà Khám bệnh HTAC',
+          specialtyId: slot.specialtyId,
+          specialtyName: slot.specialtyName,
+          doctorId: slot.doctorId,
+          doctorName: doctorMap.get(slot.doctorId)?.fullName,
+        });
+      }
+    });
+
+    // 2. Bổ sung các phòng nếu có lượt chờ nhưng chưa có slot trong danh sách
+    waitingVisits.forEach((v) => {
+      if (v.roomId && !map.has(v.roomId)) {
+        map.set(v.roomId, {
+          id: v.roomId,
+          name: `Phòng khám số ${v.roomId}`,
+          location: 'Tòa nhà Khám bệnh HTAC',
+        });
+      }
+    });
+
+    const list = Array.from(map.values());
+    list.sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true }));
+    return list;
+  }, [todaySlots, waitingVisits, doctorMap]);
+
+  // Trích xuất danh sách Chuyên khoa có ca trực hôm nay
+  const activeSpecialties = useMemo<SpecialtyItem[]>(() => {
+    const map = new Map<number, string>();
+    todaySlots.forEach((slot) => {
+      if (slot.specialtyId && slot.specialtyName) {
+        map.set(slot.specialtyId, slot.specialtyName);
+      }
+    });
+    doctors.forEach((doc) => {
+      if (doc.specialtyId && doc.specialtyName && !map.has(doc.specialtyId)) {
+        map.set(doc.specialtyId, doc.specialtyName);
+      }
+    });
+    const list = Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    list.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+    return list;
+  }, [todaySlots, doctors]);
+
+  const roomLookup = useMemo(() => {
+    const map = new Map<number, ClinicRoomInfo>();
+    activeRooms.forEach((r) => map.set(r.id, r));
+    return map;
+  }, [activeRooms]);
+
+  // Tự động chọn phòng đầu tiên khi danh sách phòng khả dụng nếu chưa chọn
+  useEffect(() => {
+    if (activeRooms.length > 0 && selectedRoomId === null) {
+      setSelectedRoomId(activeRooms[0].id);
+    }
+  }, [activeRooms, selectedRoomId]);
+
+  // =========================================================================
+  // TẢI DỮ LIỆU HÀNG ĐỢI & BÁO CÁO TRONG NGÀY
+  // =========================================================================
   const loadQueueData = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      // 1. Tải các ca khám của ngày đã chọn
+      // 1. Tải các ca khám của ngày hôm nay
       const slotsRes = await publicDoctorService.searchSlots({
-        date: selectedDate,
+        date: todayStr,
         size: 100,
       });
       setTodaySlots(slotsRes.items);
 
-      // 2. Tải danh sách lượt chờ WAITING
+      // 2. Tải danh sách lượt chờ WAITING hôm nay
       const waitingRes = await receptionQueueService.getWaitingVisits({
-        date: selectedDate,
+        date: todayStr,
         size: 100,
         sort: 'queueNumber,ASC',
       });
       setWaitingVisits(waitingRes.items);
 
-      // 3. Tải báo cáo lượt đến (tính từ selectedDate đến selectedDate + 1)
-      const nextDay = new Date(selectedDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-      const nextDayStr = nextDay.toISOString().slice(0, 10);
-
+      // 3. Tải báo cáo lượt đến trong ngày [today, tomorrow)
       try {
         const reportRes = await receptionQueueService.getVisitsReport({
-          from: selectedDate,
-          to: nextDayStr,
+          from: todayStr,
+          to: tomorrowStr,
           size: 100,
         });
         setReportRows(reportRes.items);
       } catch (repErr) {
-        console.warn('[ReceptionQueue] Lỗi tải báo cáo visits:', repErr);
+        console.warn('[ReceptionQueue] Lỗi tải báo cáo visits hôm nay:', repErr);
         setReportRows([]);
       }
 
@@ -166,7 +252,7 @@ export const ReceptionQueuePage: React.FC = () => {
         .filter((pid) => !patientCache.has(pid));
 
       if (uncachedIds.length > 0) {
-        const uniqueIds = Array.from(new Set(uncachedIds)).slice(0, 20);
+        const uniqueIds = Array.from(new Set(uncachedIds)).slice(0, 30);
         Promise.allSettled(
           uniqueIds.map((pid) => receptionPatientService.getPatient(pid))
         ).then((results) => {
@@ -187,7 +273,7 @@ export const ReceptionQueuePage: React.FC = () => {
       if (!silent) setIsLoading(false);
       setCountdown(autoRefreshInterval);
     }
-  }, [selectedDate, autoRefreshInterval, patientCache]);
+  }, [todayStr, tomorrowStr, autoRefreshInterval, patientCache]);
 
   useEffect(() => {
     loadQueueData();
@@ -212,7 +298,9 @@ export const ReceptionQueuePage: React.FC = () => {
     };
   }, [autoRefreshInterval, loadQueueData]);
 
-  // Gom nhóm thống kê toàn viện hôm nay
+  // =========================================================================
+  // THỐNG KÊ TOÀN VIỆN HÔM NAY (KPIS)
+  // =========================================================================
   const statistics = useMemo(() => {
     const totalWaiting = waitingVisits.length;
     let totalInProgress = 0;
@@ -227,9 +315,9 @@ export const ReceptionQueuePage: React.FC = () => {
 
     const totalVisitsToday = totalWaiting + totalInProgress + totalCompleted + totalNotCompleted;
 
-    // Số phòng đang có ca khám hoạt động
     const activeRoomIds = new Set<number>();
     todaySlots.forEach((s) => activeRoomIds.add(s.roomId));
+    waitingVisits.forEach((v) => activeRoomIds.add(v.roomId));
 
     return {
       totalVisitsToday,
@@ -238,43 +326,15 @@ export const ReceptionQueuePage: React.FC = () => {
       totalCompleted,
       totalNotCompleted,
       activeRoomsCount: activeRoomIds.size,
-      totalRoomsCount: rooms.length,
+      totalRoomsCount: activeRooms.length,
     };
-  }, [waitingVisits, reportRows, todaySlots, rooms]);
+  }, [waitingVisits, reportRows, todaySlots, activeRooms]);
 
-  // Lọc lượt chờ WAITING theo Search & Filter
-  const filteredWaitingVisits = useMemo(() => {
-    return waitingVisits.filter((v) => {
-      // Lọc phòng
-      if (selectedRoomFilter !== 'ALL' && v.roomId !== selectedRoomFilter) {
-        return false;
-      }
-      // Lọc chuyên khoa (dựa trên ca khám)
-      const slot = todaySlots.find((s) => s.id === v.slotId);
-      if (selectedSpecialtyFilter !== 'ALL' && slot?.specialtyId !== selectedSpecialtyFilter) {
-        return false;
-      }
-      // Lọc từ khóa: mã lượt, mã BN, tên BN trong cache, lý do
-      if (searchKw.trim()) {
-        const kw = searchKw.toLowerCase();
-        const p = patientCache.get(v.patientId);
-        const matchCode = v.visitCode.toLowerCase().includes(kw);
-        const matchPid = String(v.patientId).includes(kw);
-        const matchName = p?.fullName.toLowerCase().includes(kw) || false;
-        const matchPCode = p?.patientCode.toLowerCase().includes(kw) || false;
-        const matchReason = v.reason?.toLowerCase().includes(kw) || false;
-        if (!matchCode && !matchPid && !matchName && !matchPCode && !matchReason) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [waitingVisits, selectedRoomFilter, selectedSpecialtyFilter, searchKw, todaySlots, patientCache]);
-
-  // Gom thông tin dữ liệu theo từng phòng khám (cho Grid View)
+  // =========================================================================
+  // DỮ LIỆU ĐƯỢC TỔ CHỨC THEO TỪNG PHÒNG KHÁM
+  // =========================================================================
   const roomCardList = useMemo(() => {
-    return rooms.map((room) => {
-      // Các ca khám mở trong phòng này hôm nay
+    return activeRooms.map((room) => {
       const roomSlots = todaySlots.filter((s) => s.roomId === room.id);
       const isRoomActive = roomSlots.length > 0;
 
@@ -293,10 +353,9 @@ export const ReceptionQueuePage: React.FC = () => {
         }
       });
 
-      // Bác sĩ phụ trách chính (từ ca khám đầu tiên hoặc ca hiện tại)
       const mainSlot = roomSlots[0];
       const mainDoctor = mainSlot ? doctorMap.get(mainSlot.doctorId) : null;
-      const mainSpecialty = mainSlot?.specialtyName || null;
+      const mainSpecialty = mainSlot?.specialtyName || room.specialtyName || null;
 
       return {
         room,
@@ -312,19 +371,65 @@ export const ReceptionQueuePage: React.FC = () => {
         totalHandled: roomWaitingVisits.length + inProgressCount + completedCount + notCompletedCount,
       };
     }).filter((item) => {
-      // Áp dụng bộ lọc phòng và chuyên khoa nếu có
+      // Bộ lọc phòng & chuyên khoa
       if (selectedRoomFilter !== 'ALL' && item.room.id !== selectedRoomFilter) {
         return false;
       }
       if (selectedSpecialtyFilter !== 'ALL') {
-        const hasSpec = item.slots.some((s) => s.specialtyId === selectedSpecialtyFilter);
+        const hasSpec = item.slots.some((s) => s.specialtyId === selectedSpecialtyFilter) ||
+          item.room.specialtyId === selectedSpecialtyFilter;
         if (!hasSpec) return false;
       }
       return true;
     });
-  }, [rooms, todaySlots, waitingVisits, reportRows, doctorMap, selectedRoomFilter, selectedSpecialtyFilter]);
+  }, [activeRooms, todaySlots, waitingVisits, reportRows, doctorMap, selectedRoomFilter, selectedSpecialtyFilter]);
 
-  // Xử lý Báo vắng (Not Complete) hoặc Hủy tiếp nhận (Void)
+  // Thông tin phòng đang chọn (cho chế độ xem 'room')
+  const currentSelectedRoomData = useMemo(() => {
+    if (!selectedRoomId) return null;
+    return roomCardList.find((r) => r.room.id === selectedRoomId) || null;
+  }, [roomCardList, selectedRoomId]);
+
+  // Lọc danh sách lượt chờ theo Search & Filter (dùng cho chế độ 'room' và 'table')
+  const filterVisitsBySearch = useCallback(
+    (visits: ReceptionVisit[]) => {
+      if (!searchKw.trim()) return visits;
+      const kw = searchKw.toLowerCase().trim();
+      return visits.filter((v) => {
+        const p = patientCache.get(v.patientId);
+        const matchCode = v.visitCode.toLowerCase().includes(kw);
+        const matchPid = String(v.patientId).includes(kw);
+        const matchName = p?.fullName.toLowerCase().includes(kw) || false;
+        const matchPCode = p?.patientCode.toLowerCase().includes(kw) || false;
+        const matchCitizen = p?.citizenId?.toLowerCase().includes(kw) || false;
+        const matchReason = v.reason?.toLowerCase().includes(kw) || false;
+        const matchStt = String(v.queueNumber) === kw || `#${v.queueNumber}` === kw;
+        return matchCode || matchPid || matchName || matchPCode || matchCitizen || matchReason || matchStt;
+      });
+    },
+    [searchKw, patientCache]
+  );
+
+  // Danh sách lượt chờ cho bảng toàn viện (kèm lọc Chuyên khoa và Phòng)
+  const filteredAllWaitingVisits = useMemo(() => {
+    const list = waitingVisits.filter((v) => {
+      if (selectedRoomFilter !== 'ALL' && v.roomId !== selectedRoomFilter) {
+        return false;
+      }
+      const slot = todaySlots.find((s) => s.id === v.slotId);
+      const room = roomLookup.get(v.roomId);
+      const itemSpecId = slot?.specialtyId || room?.specialtyId;
+      if (selectedSpecialtyFilter !== 'ALL' && itemSpecId !== selectedSpecialtyFilter) {
+        return false;
+      }
+      return true;
+    });
+    return filterVisitsBySearch(list);
+  }, [waitingVisits, selectedRoomFilter, selectedSpecialtyFilter, todaySlots, roomLookup, filterVisitsBySearch]);
+
+  // =========================================================================
+  // XỬ LÝ NGHIỆP VỤ: BÁO VẮNG (NOT COMPLETE) & HỦY TIẾP NHẬN (VOID)
+  // =========================================================================
   const handleConfirmOutcome = async () => {
     if (!outcomeVisit || !outcomeReason.trim()) {
       toast.warning('Vui lòng nhập lý do thực hiện thao tác.');
@@ -351,96 +456,117 @@ export const ReceptionQueuePage: React.FC = () => {
     }
   };
 
-  // Format time
+  // =========================================================================
+  // TIỆN ÍCH HIỂN THỊ THỜI GIAN & THỜI LƯỢNG CHỜ
+  // =========================================================================
   const formatTime = (isoString: string) => {
     const d = new Date(isoString);
     return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const getWaitDurationBadge = (arrivedAt: string) => {
+    const arrived = new Date(arrivedAt).getTime();
+    const now = Date.now();
+    const diffMinutes = Math.max(0, Math.floor((now - arrived) / (1000 * 60)));
+
+    if (diffMinutes >= 30) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
+          <Clock3 className="w-3 h-3 text-rose-600 animate-pulse" />
+          Chờ {diffMinutes}p (Lâu)
+        </span>
+      );
+    }
+    if (diffMinutes >= 15) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+          <Clock className="w-3 h-3 text-amber-600" />
+          Chờ {diffMinutes}p
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <Clock className="w-3 h-3 text-emerald-600" />
+        {diffMinutes === 0 ? 'Vừa đến' : `${diffMinutes}p`}
+      </span>
+    );
+  };
+
   return (
-    <div className="space-y-6 antialiased selection:bg-sky-100 selection:text-sky-900 pb-12">
+    <div className="space-y-6 antialiased selection:bg-sky-100 selection:text-sky-900 pb-16">
       {/* =========================================================================
           1. HEADER BẢNG ĐIỀU KHIỂN & CÔNG CỤ ĐIỀU HÀNH
          ========================================================================= */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-50 text-sky-800 text-xs font-bold border border-sky-200">
             <Activity className="w-3.5 h-3.5 text-sky-600 animate-pulse" />
             <span>Phân hệ Nghiệp vụ Tiếp đón Bệnh nhân (F03.04)</span>
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <span>Giám Sát Hàng Đợi Phòng Khám</span>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-mono">
-              Ngày: {new Date(selectedDate).toLocaleDateString('vi-VN')}
+            <span>Giám Sát Hàng Đợi Khám Bệnh</span>
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
+              <CalendarDays className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Hôm nay: {new Date().toLocaleDateString('vi-VN')}</span>
             </span>
           </h1>
           <p className="text-xs text-slate-500 max-w-2xl">
-            Theo dõi phân bổ bệnh nhân tại tất cả các phòng khám trong ngày, phát hiện điểm nghẽn và điều phối tiếp nhận thông suốt.
+            Theo dõi phân bổ và gọi số bệnh nhân trong ngày, giám sát thời gian chờ và điều phối giảm tải tức thì giữa các phòng khám.
           </p>
         </div>
 
-        {/* CÔNG CỤ ĐIỀU KHIỂN: CHỌN NGÀY, AUTO-REFRESH & CHẾ ĐỘ XEM */}
+        {/* CÔNG CỤ ĐIỀU KHIỂN: AUTO-REFRESH & CHUYỂN ĐỔI CHẾ ĐỘ XEM */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Bộ chọn ngày nhanh */}
+          {/* Chuyển đổi 3 Chế độ xem: Theo phòng | Ma trận phòng | Toàn viện */}
           <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
             <button
               type="button"
-              onClick={() => setSelectedDate(todayStr)}
+              onClick={() => setViewMode('room')}
               className={cn(
-                'px-3 py-1.5 rounded-xl transition-all',
-                selectedDate === todayStr ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                'px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all',
+                viewMode === 'room'
+                  ? 'bg-white text-sky-800 shadow-xs ring-1 ring-slate-200/50'
+                  : 'text-slate-600 hover:text-slate-900'
               )}
+              title="Xem chuyên sâu hàng đợi của từng phòng khám"
             >
-              Hôm nay
+              <DoorOpen className="w-3.5 h-3.5" />
+              <span>Theo phòng</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setSelectedDate(tomorrowStr)}
-              className={cn(
-                'px-3 py-1.5 rounded-xl transition-all',
-                selectedDate === tomorrowStr ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              Ngày mai
-            </button>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="text-xs px-2 py-1 bg-transparent border-0 text-slate-700 outline-none font-medium cursor-pointer"
-              title="Chọn ngày tùy ý"
-            />
-          </div>
 
-          {/* Chọn chế độ xem Grid / Table */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs">
             <button
               type="button"
               onClick={() => setViewMode('grid')}
               className={cn(
-                'p-1.5 px-3 rounded-xl font-bold flex items-center gap-1.5 transition-all',
-                viewMode === 'grid' ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                'px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all',
+                viewMode === 'grid'
+                  ? 'bg-white text-sky-800 shadow-xs ring-1 ring-slate-200/50'
+                  : 'text-slate-600 hover:text-slate-900'
               )}
-              title="Xem dạng thẻ phòng khám"
+              title="Xem ma trận thẻ toàn bộ các phòng khám"
             >
               <Grid className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Thẻ phòng</span>
+              <span>Ma trận phòng</span>
             </button>
+
             <button
               type="button"
               onClick={() => setViewMode('table')}
               className={cn(
-                'p-1.5 px-3 rounded-xl font-bold flex items-center gap-1.5 transition-all',
-                viewMode === 'table' ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                'px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all',
+                viewMode === 'table'
+                  ? 'bg-white text-sky-800 shadow-xs ring-1 ring-slate-200/50'
+                  : 'text-slate-600 hover:text-slate-900'
               )}
-              title="Xem danh sách hàng đợi chi tiết"
+              title="Xem bảng tra cứu danh sách toàn viện"
             >
               <List className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Danh sách hàng đợi</span>
+              <span>Toàn viện ({filteredAllWaitingVisits.length})</span>
             </button>
           </div>
 
-          {/* Nút Làm mới & Đếm ngược tự động */}
+          {/* Tần suất làm mới & Nút Refresh */}
           <div className="flex items-center gap-1.5">
             <select
               value={autoRefreshInterval}
@@ -450,9 +576,9 @@ export const ReceptionQueuePage: React.FC = () => {
                 setCountdown(val);
               }}
               className="text-xs py-2 px-2.5 rounded-2xl border border-slate-200 bg-white font-medium text-slate-700 outline-none focus:ring-2 focus:ring-sky-500"
-              title="Tần suất tự động làm mới dữ liệu"
+              title="Tần suất tự động làm mới dữ liệu thời gian thực"
             >
-              <option value={0}>Không tự làm mới</option>
+              <option value={0}>Tắt tự làm mới</option>
               <option value={15}>Làm mới: 15s</option>
               <option value={30}>Làm mới: 30s</option>
               <option value={60}>Làm mới: 60s</option>
@@ -461,8 +587,8 @@ export const ReceptionQueuePage: React.FC = () => {
             <button
               type="button"
               onClick={() => loadQueueData(false)}
-              className="p-2 px-3 rounded-2xl bg-sky-600 text-white font-bold text-xs hover:bg-sky-700 transition-colors flex items-center gap-1.5 shadow-xs shrink-0"
-              title="Bấm để tải lại ngay"
+              className="p-2 px-3 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-xs shrink-0"
+              title="Bấm để tải lại dữ liệu hàng đợi ngay lập tức"
             >
               <RefreshCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin')} />
               <span>{autoRefreshInterval > 0 ? `${countdown}s` : 'Làm mới'}</span>
@@ -472,10 +598,10 @@ export const ReceptionQueuePage: React.FC = () => {
       </div>
 
       {/* =========================================================================
-          2. THẺ CHỈ SỐ NHANH (KPIS DASHBOARD)
+          2. THẺ CHỈ SỐ NHANH TOÀN VIỆN (KPIS DASHBOARD)
          ========================================================================= */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
-        {/* KPI 1: ĐANG CHỜ KHÁM (QUAN TRỌNG NHẤT) */}
+        {/* KPI 1: ĐANG CHỜ KHÁM */}
         <div className="p-4 rounded-3xl bg-amber-500 text-white shadow-sm space-y-1 relative overflow-hidden">
           <div className="flex items-center justify-between opacity-90 text-xs font-semibold">
             <span>Đang Chờ Khám</span>
@@ -526,25 +652,25 @@ export const ReceptionQueuePage: React.FC = () => {
             <UserCheck className="w-4 h-4 text-sky-600" />
           </div>
           <div className="text-3xl font-black text-sky-900 tracking-tight">{statistics.totalVisitsToday}</div>
-          <div className="text-[11px] text-slate-500 font-medium">Lượt đăng ký khám</div>
+          <div className="text-[11px] text-slate-500 font-medium">Lượt đăng ký khám hôm nay</div>
         </div>
 
         {/* KPI 6: SỐ PHÒNG ĐANG MỞ CA TRỰC */}
         <div className="p-4 rounded-3xl bg-white border border-slate-200 text-slate-900 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-400 text-xs font-bold">
-            <span>Phòng Trực Mở</span>
+            <span>Phòng Mở Trực</span>
             <Building2 className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-3xl font-black text-emerald-900 tracking-tight">
             {statistics.activeRoomsCount}
-            <span className="text-sm font-normal text-slate-400">/{statistics.totalRoomsCount}</span>
+            <span className="text-sm font-normal text-slate-400"> phòng</span>
           </div>
-          <div className="text-[11px] text-slate-500 font-medium">Phòng có ca hôm nay</div>
+          <div className="text-[11px] text-slate-500 font-medium">Đang tiếp nhận hôm nay</div>
         </div>
       </div>
 
       {/* =========================================================================
-          3. THANH TÌM KIẾM VÀ BỘ LỌC HÀNG ĐỢI
+          3. THANH CÔNG CỤ TÌM KIẾM VÀ BỘ LỌC CHUYÊN KHOA & PHÒNG
          ========================================================================= */}
       <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2 flex-1 min-w-[260px]">
@@ -552,7 +678,7 @@ export const ReceptionQueuePage: React.FC = () => {
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Tìm nhanh theo Mã lượt khám, Mã BN, Tên bệnh nhân hoặc Triệu chứng..."
+              placeholder="Tìm nhanh theo Số STT (#1, #2), Tên BN, Mã BN, CCCD, Mã lượt hoặc Triệu chứng..."
               value={searchKw}
               onChange={(e) => setSearchKw(e.target.value)}
               className="w-full pl-9 pr-8 py-2 rounded-2xl border border-slate-200 bg-slate-50/50 outline-none focus:bg-white focus:ring-2 focus:ring-sky-500 font-medium"
@@ -571,7 +697,7 @@ export const ReceptionQueuePage: React.FC = () => {
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Lọc theo Chuyên khoa */}
-          <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-2xl border border-slate-200">
+          <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <span className="text-slate-500 font-semibold">Chuyên khoa:</span>
             <select
@@ -581,10 +707,10 @@ export const ReceptionQueuePage: React.FC = () => {
                   e.target.value === 'ALL' ? 'ALL' : Number(e.target.value)
                 )
               }
-              className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer"
+              className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer max-w-[180px] truncate"
             >
-              <option value="ALL">Tất cả ({specialties.length})</option>
-              {specialties.map((s) => (
+              <option value="ALL">Tất cả chuyên khoa ({activeSpecialties.length})</option>
+              {activeSpecialties.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
@@ -592,27 +718,29 @@ export const ReceptionQueuePage: React.FC = () => {
             </select>
           </div>
 
-          {/* Lọc theo Phòng khám */}
-          <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-2xl border border-slate-200">
-            <Building2 className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-500 font-semibold">Phòng:</span>
-            <select
-              value={selectedRoomFilter}
-              onChange={(e) =>
-                setSelectedRoomFilter(
-                  e.target.value === 'ALL' ? 'ALL' : Number(e.target.value)
-                )
-              }
-              className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer"
-            >
-              <option value="ALL">Tất cả ({rooms.length})</option>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Lọc theo Phòng khám (khi ở chế độ 'grid' hoặc 'table') */}
+          {viewMode !== 'room' && (
+            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200">
+              <Building2 className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-slate-500 font-semibold">Phòng:</span>
+              <select
+                value={selectedRoomFilter}
+                onChange={(e) =>
+                  setSelectedRoomFilter(
+                    e.target.value === 'ALL' ? 'ALL' : Number(e.target.value)
+                  )
+                }
+                className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer max-w-[180px] truncate"
+              >
+                <option value="ALL">Tất cả phòng ({activeRooms.length})</option>
+                {activeRooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {(selectedRoomFilter !== 'ALL' || selectedSpecialtyFilter !== 'ALL' || searchKw) && (
             <button
@@ -631,7 +759,281 @@ export const ReceptionQueuePage: React.FC = () => {
       </div>
 
       {/* =========================================================================
-          4. NỘI DUNG CHÍNH: CHẾ ĐỘ XEM GRID (THẺ PHÒNG KHÁM)
+          4. CHẾ ĐỘ 1: THEO TỪNG PHÒNG KHÁM (ROOM DEEP-DIVE VIEW) - TRỌNG TÂM
+         ========================================================================= */}
+      {viewMode === 'room' && (
+        <div className="space-y-4">
+          {/* THANH CHỌN PHÒNG KHÁM NHANH (QUICK ROOM SELECTOR PILLS) */}
+          <div className="bg-white p-3 rounded-3xl border border-slate-200 shadow-xs space-y-2">
+            <div className="flex items-center justify-between text-xs px-2 text-slate-500">
+              <span className="font-bold flex items-center gap-1.5 text-slate-700">
+                <DoorOpen className="w-4 h-4 text-sky-600" />
+                <span>Chọn Phòng khám để theo dõi hàng đợi chi tiết:</span>
+              </span>
+              <span className="text-[11px]">
+                Có <strong>{roomCardList.length}</strong> phòng trực hôm nay
+              </span>
+            </div>
+
+            {/* Danh sách nút chọn phòng dạng cuộn ngang */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+              {roomCardList.map((item) => {
+                const isSelected = selectedRoomId === item.room.id;
+                const waitCount = item.waitingCount;
+
+                // Màu sắc tải phòng
+                let loadBadgeClass = 'bg-emerald-100 text-emerald-800';
+                if (waitCount > 7) loadBadgeClass = 'bg-rose-100 text-rose-800';
+                else if (waitCount > 2) loadBadgeClass = 'bg-amber-100 text-amber-800';
+
+                return (
+                  <button
+                    key={item.room.id}
+                    type="button"
+                    onClick={() => setSelectedRoomId(item.room.id)}
+                    className={cn(
+                      'px-3.5 py-2 rounded-2xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 border',
+                      isSelected
+                        ? 'bg-sky-900 text-white border-sky-900 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    )}
+                  >
+                    <span>{item.room.name}</span>
+                    <span
+                      className={cn(
+                        'px-2 py-0.5 rounded-full text-[10px] font-black',
+                        isSelected ? 'bg-white text-sky-900' : loadBadgeClass
+                      )}
+                    >
+                      {waitCount}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* BANNER THÔNG TIN CHI TIẾT CỦA PHÒNG ĐANG CHỌN */}
+          {currentSelectedRoomData ? (
+            <div className="space-y-4">
+              <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-sky-100 text-sky-800 flex items-center justify-center shrink-0 border border-sky-200">
+                    <DoorOpen className="w-7 h-7" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                        {currentSelectedRoomData.room.name}
+                      </h2>
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-800 border border-sky-200">
+                        {currentSelectedRoomData.mainSpecialty || 'Đa khoa'}
+                      </span>
+                      {currentSelectedRoomData.waitingCount > 7 && (
+                        <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                          Hàng đợi đông
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 flex items-center gap-2">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{currentSelectedRoomData.room.location || 'Tòa nhà Khám bệnh HTAC'}</span>
+                      <span>•</span>
+                      <Stethoscope className="w-3.5 h-3.5 text-slate-400" />
+                      <span>
+                        Bác sĩ trực:{' '}
+                        <strong className="text-slate-800">
+                          {currentSelectedRoomData.mainDoctor?.fullName || 'Bác sĩ trực ca'}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4 Chỉ số mini của phòng đang chọn */}
+                <div className="grid grid-cols-4 gap-2.5 sm:gap-4 text-center shrink-0 bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-100">
+                  <div className="px-2">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase">Đang chờ</div>
+                    <div className="text-2xl font-black text-amber-600 font-mono">
+                      {currentSelectedRoomData.waitingCount}
+                    </div>
+                  </div>
+                  <div className="px-2 border-l border-slate-200">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase">Đang khám</div>
+                    <div className="text-2xl font-black text-sky-600 font-mono">
+                      {currentSelectedRoomData.inProgressCount}
+                    </div>
+                  </div>
+                  <div className="px-2 border-l border-slate-200">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase">Đã khám</div>
+                    <div className="text-2xl font-black text-emerald-600 font-mono">
+                      {currentSelectedRoomData.completedCount}
+                    </div>
+                  </div>
+                  <div className="px-2 border-l border-slate-200">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase">Báo vắng</div>
+                    <div className="text-2xl font-black text-slate-600 font-mono">
+                      {currentSelectedRoomData.notCompletedCount}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* BẢNG DANH SÁCH BỆNH NHÂN CHỜ TẠI PHÒNG NÀY */}
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+                <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
+                      <span>Danh Sách Thứ Tự Gọi Khám</span>
+                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                        {filterVisitsBySearch(currentSelectedRoomData.waitingVisits).length} bệnh nhân
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Sắp xếp theo thứ tự số phiếu cấp khám (STT tăng dần).
+                    </p>
+                  </div>
+
+                  <div className="text-xs text-slate-400 hidden sm:block">
+                    Cập nhật thời gian thực theo loa gọi phòng khám
+                  </div>
+                </div>
+
+                {filterVisitsBySearch(currentSelectedRoomData.waitingVisits).length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-xs space-y-2 bg-slate-50/40">
+                    <Users className="w-10 h-10 mx-auto text-slate-300" />
+                    <p className="font-bold text-slate-600 text-sm">
+                      Hiện không có bệnh nhân nào đang chờ tại phòng này.
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Bác sĩ đã xử lý hết hàng đợi hoặc phòng chưa có lượt tiếp đón mới.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                          <th className="py-3.5 px-4 text-center w-24">Số STT</th>
+                          <th className="py-3.5 px-4">Người Bệnh</th>
+                          <th className="py-3.5 px-4">Mã Lượt Khám</th>
+                          <th className="py-3.5 px-4">Thời Gian Tiếp Nhận</th>
+                          <th className="py-3.5 px-4">Thời Lượng Chờ</th>
+                          <th className="py-3.5 px-4">Triệu Chứng / Lý Do Khám</th>
+                          <th className="py-3.5 px-4 text-right">Thao Tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {filterVisitsBySearch(currentSelectedRoomData.waitingVisits).map((v) => {
+                          const p = patientCache.get(v.patientId);
+
+                          return (
+                            <tr key={v.id} className="hover:bg-slate-50/80 transition-colors">
+                              {/* SỐ STT */}
+                              <td className="py-4 px-4 text-center">
+                                <span className="font-mono font-black text-sky-900 text-lg bg-sky-50 px-3 py-1.5 rounded-2xl border border-sky-200 inline-block shadow-2xs">
+                                  #{v.queueNumber}
+                                </span>
+                              </td>
+
+                              {/* NGƯỜI BỆNH */}
+                              <td className="py-4 px-4">
+                                <div className="font-extrabold text-slate-900 text-sm">
+                                  {p?.fullName || `Bệnh nhân #${v.patientId}`}
+                                </div>
+                                <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                                  Mã BN: {p?.patientCode || `#${v.patientId}`}
+                                  {p?.citizenId ? ` • CCCD: ${p.citizenId}` : ''}
+                                </div>
+                              </td>
+
+                              {/* MÃ LƯỢT */}
+                              <td className="py-4 px-4 font-mono">
+                                <div className="font-bold text-slate-800">{v.visitCode}</div>
+                                <div className="text-[10px] text-slate-400">ID #{v.id}</div>
+                              </td>
+
+                              {/* GIỜ TIẾP NHẬN */}
+                              <td className="py-4 px-4 font-mono text-slate-600">
+                                {formatTime(v.arrivedAt)}
+                              </td>
+
+                              {/* THỜI GIAN CHỜ TẠI SẢNH */}
+                              <td className="py-4 px-4">
+                                {getWaitDurationBadge(v.arrivedAt)}
+                              </td>
+
+                              {/* TRIỆU CHỨNG */}
+                              <td className="py-4 px-4 max-w-[220px] truncate italic text-slate-600" title={v.reason || ''}>
+                                {v.reason ? `“${v.reason}”` : '---'}
+                              </td>
+
+                              {/* THAO TÁC */}
+                              <td className="py-4 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {/* IN PHIẾU */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedTicketVisit(v);
+                                      setIsTicketModalOpen(true);
+                                    }}
+                                    className="p-1.5 px-3 rounded-xl bg-slate-100 hover:bg-sky-50 text-sky-700 font-bold text-xs transition-colors flex items-center gap-1.5"
+                                    title="In lại phiếu số thứ tự nhiệt 80mm"
+                                  >
+                                    <Printer className="w-3.5 h-3.5" />
+                                    <span>In phiếu</span>
+                                  </button>
+
+                                  {/* BÁO VẮNG */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOutcomeVisit(v);
+                                      setOutcomeAction('not_complete');
+                                      setOutcomeReason('Bệnh nhân không có mặt khi loa gọi vào khám');
+                                    }}
+                                    className="p-1.5 px-2.5 rounded-xl border border-amber-200 text-amber-700 hover:bg-amber-50 font-bold text-xs transition-colors"
+                                    title="Báo vắng mặt (NOT_COMPLETED)"
+                                  >
+                                    Báo vắng
+                                  </button>
+
+                                  {/* HỦY VOID */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOutcomeVisit(v);
+                                      setOutcomeAction('void');
+                                      setOutcomeReason('Thao tác tiếp nhận nhầm phòng khám');
+                                    }}
+                                    className="p-1.5 px-2.5 rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50 font-bold text-xs transition-colors"
+                                    title="Vô hiệu hóa lượt tiếp nhận (VOID)"
+                                  >
+                                    Hủy bỏ
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="py-16 text-center text-slate-400 text-xs bg-white rounded-3xl border border-slate-200">
+              Vui lòng chọn một phòng khám phía trên để xem chi tiết hàng đợi.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          5. CHẾ ĐỘ 2: MA TRẬN THẺ PHÒNG KHÁM (MULTI-ROOM GRID/KANBAN)
          ========================================================================= */}
       {viewMode === 'grid' && (
         <div className="space-y-4">
@@ -662,7 +1064,11 @@ export const ReceptionQueuePage: React.FC = () => {
               let statusText = 'Chưa mở ca trực';
 
               if (isRoomActive) {
-                if (waitingCount > 0) {
+                if (waitingCount > 7) {
+                  statusBorder = 'border-rose-300 ring-1 ring-rose-300/40';
+                  badgeBg = 'bg-rose-100 text-rose-900 font-black';
+                  statusText = `${waitingCount} bệnh nhân chờ (Đông)`;
+                } else if (waitingCount > 0) {
                   statusBorder = 'border-amber-300 ring-1 ring-amber-300/40';
                   badgeBg = 'bg-amber-100 text-amber-900 font-black';
                   statusText = `${waitingCount} bệnh nhân chờ`;
@@ -799,17 +1205,17 @@ export const ReceptionQueuePage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* NÚT XEM CHI TIẾT LỌC CHO PHÒNG NÀY */}
+                  {/* NÚT CHUYỂN SANG CHẾ ĐỘ XEM SÂU PHÒNG NÀY */}
                   <div className="pt-1">
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedRoomFilter(room.id);
-                        setViewMode('table');
+                        setSelectedRoomId(room.id);
+                        setViewMode('room');
                       }}
                       className="w-full py-2 px-3 rounded-2xl bg-slate-100 hover:bg-sky-50 hover:text-sky-700 font-bold text-xs text-slate-700 transition-colors flex items-center justify-center gap-1.5"
                     >
-                      <span>Xem toàn bộ hàng đợi phòng này</span>
+                      <span>Vào xem chi tiết hàng đợi phòng này</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -821,20 +1227,20 @@ export const ReceptionQueuePage: React.FC = () => {
       )}
 
       {/* =========================================================================
-          5. NỘI DUNG CHÍNH: CHẾ ĐỘ XEM BẢNG CHI TIẾT (DETAILED QUEUE TABLE)
+          6. CHẾ ĐỘ 3: BẢNG TOÀN VIỆN TRA CỨU (ALL-HOSPITAL MASTER TABLE)
          ========================================================================= */}
       {viewMode === 'table' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden space-y-4 p-5 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
               <h2 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-                <span>Danh Sách Hàng Đợi Bệnh Nhân Đang Chờ</span>
+                <span>Danh Sách Toàn Viện Bệnh Nhân Đang Chờ Khám</span>
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                  {filteredWaitingVisits.length} lượt
+                  {filteredAllWaitingVisits.length} lượt
                 </span>
               </h2>
               <p className="text-xs text-slate-500">
-                Hiển thị thứ tự gọi khám của từng người bệnh tại các phòng khám chuyên khoa.
+                Hiển thị thứ tự gọi khám của tất cả người bệnh tại tất cả các phòng khám chuyên khoa trong ngày.
               </p>
             </div>
 
@@ -848,12 +1254,12 @@ export const ReceptionQueuePage: React.FC = () => {
               <RefreshCw className="w-8 h-8 animate-spin text-sky-600" />
               <span>Đang tải danh sách hàng đợi trực tiếp...</span>
             </div>
-          ) : filteredWaitingVisits.length === 0 ? (
+          ) : filteredAllWaitingVisits.length === 0 ? (
             <div className="py-16 text-center text-slate-400 text-xs space-y-2 bg-slate-50/50 rounded-2xl border border-slate-100">
               <Users className="w-8 h-8 mx-auto text-slate-300" />
               <p className="font-semibold text-slate-600">Không có bệnh nhân nào phù hợp với bộ lọc hiện tại.</p>
               <p className="text-[11px] text-slate-400">
-                Hãy thử chọn ngày khác hoặc xóa các điều kiện lọc phòng/chuyên khoa.
+                Hãy thử xóa bớt các từ khóa tìm kiếm hoặc điều kiện lọc chuyên khoa / phòng.
               </p>
             </div>
           ) : (
@@ -867,13 +1273,14 @@ export const ReceptionQueuePage: React.FC = () => {
                     <th className="py-3 px-3">Phòng Tiếp Nhận</th>
                     <th className="py-3 px-3">Bác Sĩ Phụ Trách</th>
                     <th className="py-3 px-3">Giờ Đón</th>
+                    <th className="py-3 px-3">Thời Lượng Chờ</th>
                     <th className="py-3 px-3">Lý Do / Triệu Chứng</th>
                     <th className="py-3 px-3 text-right">Thao Tác</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredWaitingVisits.map((v) => {
-                    const room = roomMap.get(v.roomId);
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {filteredAllWaitingVisits.map((v) => {
+                    const room = roomLookup.get(v.roomId);
                     const slot = todaySlots.find((s) => s.id === v.slotId);
                     const doc = slot ? doctorMap.get(slot.doctorId) : null;
                     const p = patientCache.get(v.patientId);
@@ -882,7 +1289,7 @@ export const ReceptionQueuePage: React.FC = () => {
                       <tr key={v.id} className="hover:bg-slate-50/80 transition-colors">
                         {/* STT */}
                         <td className="py-3.5 px-3 text-center">
-                          <span className="font-mono font-black text-sky-700 text-base bg-sky-50 px-2.5 py-1 rounded-xl border border-sky-200">
+                          <span className="font-mono font-black text-sky-700 text-base bg-sky-50 px-2.5 py-1 rounded-xl border border-sky-200 inline-block">
                             #{v.queueNumber}
                           </span>
                         </td>
@@ -910,7 +1317,7 @@ export const ReceptionQueuePage: React.FC = () => {
                             {room?.name || `Phòng số ${v.roomId}`}
                           </div>
                           <div className="text-[11px] text-sky-700 font-medium">
-                            {slot?.specialtyName || 'Đa khoa'}
+                            {slot?.specialtyName || room?.specialtyName || 'Đa khoa'}
                           </div>
                         </td>
 
@@ -918,7 +1325,7 @@ export const ReceptionQueuePage: React.FC = () => {
                         <td className="py-3.5 px-3">
                           <div className="font-bold text-slate-800">
                             {doc?.professionalTitle ? `${doc.professionalTitle} ` : ''}
-                            {doc?.fullName || `BS ID #${slot?.doctorId || '---'}`}
+                            {doc?.fullName || (room?.doctorName || 'Bác sĩ trực')}
                           </div>
                           <div className="text-[10px] text-slate-400">
                             {room?.location || 'HTAC'}
@@ -930,8 +1337,13 @@ export const ReceptionQueuePage: React.FC = () => {
                           {formatTime(v.arrivedAt)}
                         </td>
 
+                        {/* THỜI GIAN CHỜ */}
+                        <td className="py-3.5 px-3">
+                          {getWaitDurationBadge(v.arrivedAt)}
+                        </td>
+
                         {/* LÝ DO */}
-                        <td className="py-3.5 px-3 max-w-[200px] truncate italic text-slate-600" title={v.reason || ''}>
+                        <td className="py-3.5 px-3 max-w-[180px] truncate italic text-slate-600" title={v.reason || ''}>
                           {v.reason ? `“${v.reason}”` : '---'}
                         </td>
 
@@ -992,7 +1404,7 @@ export const ReceptionQueuePage: React.FC = () => {
       )}
 
       {/* =========================================================================
-          6. MODAL XEM & IN LẠI PHIẾU SỐ THỨ TỰ (THERMAL TICKET PREVIEW)
+          7. MODAL XEM & IN LẠI PHIẾU SỐ THỨ TỰ (THERMAL TICKET 80MM PREVIEW)
          ========================================================================= */}
       {isTicketModalOpen && selectedTicketVisit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
@@ -1042,7 +1454,7 @@ export const ReceptionQueuePage: React.FC = () => {
                 <div>
                   Phòng khám:{' '}
                   <strong className="text-sky-800">
-                    {roomMap.get(selectedTicketVisit.roomId)?.name || `Phòng ${selectedTicketVisit.roomId}`}
+                    {roomLookup.get(selectedTicketVisit.roomId)?.name || `Phòng ${selectedTicketVisit.roomId}`}
                   </strong>
                 </div>
                 <div>
@@ -1088,7 +1500,7 @@ export const ReceptionQueuePage: React.FC = () => {
       )}
 
       {/* =========================================================================
-          7. MODAL XÁC NHẬN BÁO VẮNG (NOT COMPLETE) HOẶC HỦY (VOID)
+          8. MODAL XÁC NHẬN BÁO VẮNG (NOT COMPLETE) HOẶC HỦY (VOID)
          ========================================================================= */}
       {outcomeAction && outcomeVisit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">

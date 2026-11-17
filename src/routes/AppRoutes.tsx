@@ -8,6 +8,9 @@ import { DoctorsPage } from '../pages/public/DoctorsPage';
 import { BookingPage } from '../pages/public/BookingPage';
 import { PatientAppointmentsPage } from '../pages/patient/PatientAppointmentsPage';
 import { PatientHistoryPage } from '../pages/patient/PatientHistoryPage';
+import { PatientPrescriptionsPage } from '../pages/patient/PatientPrescriptionsPage';
+import { PatientProfilePage } from '../pages/patient/PatientProfilePage';
+import { PatientChangePasswordPage } from '../pages/patient/PatientChangePasswordPage';
 import { LoginPage } from '../pages/auth/LoginPage';
 import { PatientRegisterPage } from '../pages/auth/PatientRegisterPage';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
@@ -66,6 +69,33 @@ export const AppRoutes: React.FC = () => {
         />
         <Route path="/history" element={<Navigate to="/patient/history" replace />} />
         <Route path="/ehr" element={<Navigate to="/patient/history" replace />} />
+        <Route
+          path="/patient/prescriptions"
+          element={
+            <ProtectedRoute allowedRoles={['PATIENT', 'ADMIN']}>
+              <PatientPrescriptionsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/prescriptions" element={<Navigate to="/patient/prescriptions" replace />} />
+        <Route
+          path="/patient/profile"
+          element={
+            <ProtectedRoute allowedRoles={['PATIENT', 'ADMIN']}>
+              <PatientProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/profile" element={<Navigate to="/patient/profile" replace />} />
+        <Route
+          path="/patient/change-password"
+          element={
+            <ProtectedRoute allowedRoles={['PATIENT', 'ADMIN']}>
+              <PatientChangePasswordPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/change-password" element={<Navigate to="/patient/change-password" replace />} />
       </Route>
 
       {/* 2. CỔNG XÁC THỰC: ĐĂNG NHẬP & ĐĂNG KÝ BỆNH NHÂN */}
